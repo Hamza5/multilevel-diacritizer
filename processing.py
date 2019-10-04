@@ -1,3 +1,4 @@
+import re
 # The prefixes and suffixes that should be separated from the stem before converting it to a pattern
 SEPARATED_PREFIXES = {'ل', 'ك', 'ف', 'ت', 'ب', 'ن', 'ال', 'لل'}
 SEPARATED_PREFIXES.update({x + 'ال' for x in {'ك', 'ف', 'و', 'ب'}})
@@ -11,6 +12,7 @@ SEPARATED_PREFIXES.update({'باست'})
 SEPARATED_SUFFIXES = {'ت', 'ك', 'ه', 'ها', 'ون', 'ين', 'ان', 'كم', 'هم', 'كن', 'هن', 'كما', 'هما'}
 SEPARATED_SUFFIXES.update({'ت' + x for x in {'ه', 'ك', 'ين', 'ان', 'كم', 'هم', 'كن', 'هن', 'كما', 'هما', 'ما', 'ن'}})
 MIN_STEM_LEN = 2
+ORDINARY_ARABIC_LETTERS_PATTERN = re.compile(r'[بتثجحخدذرزسشصضطظعغفقكلمنه]')
 
 
 def separate_affixes(u_word):
@@ -26,3 +28,10 @@ def separate_affixes(u_word):
                 acceptable_affixes.append((p, s))
     prefix, suffix = max(acceptable_affixes, key=lambda x: len(x[0]) + len(x[1]))
     return prefix, u_word[len(prefix):len(u_word)-len(suffix)], suffix
+
+
+def convert_to_pattern(u_word) -> str:
+    assert isinstance(u_word, str)
+    prefix, stem, suffix = separate_affixes(u_word)
+    stem = ORDINARY_ARABIC_LETTERS_PATTERN.sub('ح', stem)
+    return prefix + stem + suffix
