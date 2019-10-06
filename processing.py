@@ -13,6 +13,8 @@ SEPARATED_SUFFIXES = {'ت', 'ك', 'ه', 'ها', 'ون', 'ين', 'ان', 'كم', 
 SEPARATED_SUFFIXES.update({'ت' + x for x in {'ه', 'ك', 'ين', 'ان', 'كم', 'هم', 'كن', 'هن', 'كما', 'هما', 'ما', 'ن'}})
 MIN_STEM_LEN = 2
 ORDINARY_ARABIC_LETTERS_PATTERN = re.compile(r'[بتثجحخدذرزسشصضطظعغفقكلمنه]')
+DIACRITICS = set(chr(code) for code in range(0x064B, 0x0653))
+DIACRITICS_PATTERN = re.compile('['+''.join(DIACRITICS)+']')
 
 
 def separate_affixes(u_word):
@@ -35,3 +37,7 @@ def convert_to_pattern(u_word) -> str:
     prefix, stem, suffix = separate_affixes(u_word)
     stem = ORDINARY_ARABIC_LETTERS_PATTERN.sub('ح', stem)
     return prefix + stem + suffix
+
+
+def clear_diacritics(d_sentence):
+    return DIACRITICS_PATTERN.sub('', d_sentence)
