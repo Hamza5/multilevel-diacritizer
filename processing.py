@@ -1,11 +1,12 @@
 import re
 from typing import Iterable
 # The prefixes and suffixes that should be separated from the stem before converting it to a pattern
-SEPARATED_PREFIXES = {'ل', 'ك', 'ف', 'ت', 'ب', 'ن', 'ال', 'لل'}
+SEPARATED_PREFIXES = {'ل', 'م', 'ك', 'ف', 'ت', 'ب', 'ن', 'ال', 'لل'}
 SEPARATED_PREFIXES.update({x + 'ال' for x in {'ك', 'ف', 'و', 'ب'}})
+SEPARATED_PREFIXES.update({x + 'الم' for x in {'ك', 'ف', 'و', 'ب'}})
 SEPARATED_PREFIXES.update({'س' + x for x in {'ي', 'أ', 'ت', 'ن'}})
-SEPARATED_PREFIXES.update({'و' + x for x in {'بال', 'كال', 'ت', 'ن'}})
-SEPARATED_PREFIXES.update({'ف' + x for x in {'بال', 'كال', 'ي', 'أ', 'ت', 'ن'}})
+SEPARATED_PREFIXES.update({'و' + x for x in {'بال', 'كال', 'ت', 'ن', 'بالم', 'كالم'}})
+SEPARATED_PREFIXES.update({'ف' + x for x in {'بال', 'كال', 'ي', 'أ', 'ت', 'ن', 'بالم', 'كالم'}})
 SEPARATED_PREFIXES.update({x + 'ست' for x in {'ي', 'ا', 'أ', 'ت', 'ن'}})
 SEPARATED_PREFIXES.update({'و' + x + 'ست' for x in {'ي', 'ا', 'أ', 'ت', 'ن'}})
 SEPARATED_PREFIXES.update({'ف' + x + 'ست' for x in {'ي', 'ا', 'أ', 'ت', 'ن'}})
