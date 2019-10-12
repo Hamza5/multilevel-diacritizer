@@ -1,18 +1,17 @@
-from collections import namedtuple, UserDict, Counter, defaultdict
+from collections import UserDict, Counter, defaultdict
 
 import numpy as np
 from pomegranate import HiddenMarkovModel, DiscreteDistribution
 
 from processing import convert_to_pattern, clear_diacritics, merge_diacritics, extract_diacritics
 
-FakeState = namedtuple('FakeState', 'name')
 UNKNOWN = '<unk>'
 
 
-class DefaultStateDict(UserDict):
+class DefaultDict(UserDict):
 
     def __missing__(self, key):
-        return FakeState(name=convert_to_pattern(key))
+        return convert_to_pattern(key)
 
 
 class MostFrequentPatternDiacritizer:
@@ -35,8 +34,8 @@ class MostFrequentPatternDiacritizer:
         for d_w in diacritized_words:
             words_diacs[clear_diacritics(d_w)][convert_to_pattern(d_w)] += 1
         words_top_diac = {w: max(words_diacs[w].keys(), key=words_diacs[w].get) for w in words_diacs.keys()}
-        self.word_diacritization = DefaultStateDict()
-        self.word_diacritization.update({word: FakeState(name=diac) for word, diac in words_top_diac.items()})
+        self.word_diacritization = DefaultDict()
+        self.word_diacritization.update({word: diac for word, diac in words_top_diac.items()})
 
     def predict(self, undiacritized_words_sequence):
         """
@@ -46,7 +45,7 @@ class MostFrequentPatternDiacritizer:
         """
         assert isinstance(undiacritized_words_sequence, list) and all(isinstance(w, str) for w in
                                                                       undiacritized_words_sequence)
-        return [merge_diacritics(u_w, extract_diacritics(self.word_diacritization[u_w].name))
+        return [merge_diacritics(u_w, extract_diacritics(self.word_diacritization[u_w]))
                 for u_w in undiacritized_words_sequence]
 
 
