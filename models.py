@@ -63,36 +63,35 @@ class BigramHMMPatternDiacritizer:
         assert 0 < epsilon < 1
         d_words = []
         d_patterns_bigrams = []
-        self.u_words = set()
+        self.u_patterns = set()
         print('Extracting the words and generating the required forms...')
         for d_words_sequence in diacritized_word_sequences:
             d_words.extend(d_words_sequence)
-            u_words = [clear_diacritics(d_w) for d_w in d_words]
-            self.u_words.update(u_words)
+            self.u_patterns.update([convert_to_pattern(clear_diacritics(d_w)) for d_w in d_words])
             for d_w1, d_w2 in zip(d_words_sequence[:-1], d_words_sequence[1:]):
                 d_patterns_bigrams.append((convert_to_pattern(d_w1), convert_to_pattern(d_w2)))
         print('Indexing...')
         patterns_unigrams_counter = Counter([convert_to_pattern(d_w) for d_w in d_words])
         patterns_bigrams_counter = Counter(d_patterns_bigrams)
-        d_pattern_u_word_counter = defaultdict(Counter)
+        d_pattern_u_pattern_counter = defaultdict(Counter)
         for d_word in d_words:
-            d_pattern_u_word_counter[convert_to_pattern(d_word)][clear_diacritics(d_word)] += 1
+            d_pattern_u_pattern_counter[convert_to_pattern(d_word)][convert_to_pattern(clear_diacritics(d_word))] += 1
         states = []
         distributions = []
         print('Calculating the probabilities...')
-        for pattern, u_word_count in d_pattern_u_word_counter.items():
-            u_words_emissions = {UNKNOWN: epsilon}
-            u_words_emissions.update({u_word: count/sum(u_word_count.values()) - epsilon/len(u_word_count)
-                                      for u_word, count in u_word_count.items()})
-            emissions_distribution = DiscreteDistribution(u_words_emissions)
+        for pattern, u_pattern_count in d_pattern_u_pattern_counter.items():
+            u_patterns_emissions = {UNKNOWN: epsilon}
+            u_patterns_emissions.update({u_pattern: count/sum(u_pattern_count.values()) - epsilon/len(u_pattern_count)
+                                         for u_pattern, count in u_pattern_count.items()})
+            emissions_distribution = DiscreteDistribution(u_patterns_emissions)
             states.append(pattern)
             distributions.append(emissions_distribution)
         transitions = np.ones((len(states), len(states))) * epsilon
-        for i, pattern1 in enumerate(states):
-            for j, (pattern2, distribution) in enumerate(zip(states, distributions)):
-                if (pattern1, pattern2) in patterns_bigrams_counter.keys():
-                    transitions[i, j] += patterns_bigrams_counter[pattern1, pattern2] /\
-                                         patterns_unigrams_counter[pattern1]
+        for i, d_pattern1 in enumerate(states):
+            for j, (d_pattern2, distribution) in enumerate(zip(states, distributions)):
+                if (d_pattern1, d_pattern2) in patterns_bigrams_counter.keys():
+                    transitions[i, j] += patterns_bigrams_counter[d_pattern1, d_pattern2] /\
+                                         patterns_unigrams_counter[d_pattern1]
         transitions /= np.sum(transitions, axis=-1, keepdims=True)
         transitions -= epsilon / transitions.shape[0]
         end_probs = (1 - np.sum(transitions, axis=-1, keepdims=True)).flatten()
@@ -106,10 +105,11 @@ class BigramHMMPatternDiacritizer:
                                                                       undiacritized_words_sequence)
         sequence = []
         for u_w in undiacritized_words_sequence:
-            if u_w not in self.u_words:
+            u_p = convert_to_pattern(u_w)
+            if u_p not in self.u_patterns:
                 sequence.append(UNKNOWN)
             else:
-                sequence.append(u_w)
+                sequence.append(u_p)
         predicted_sequence = [state.name for num, state in self.model.viterbi(sequence)[1][1:-1]]
         for i in range(len(predicted_sequence)):
             if sequence[i] == UNKNOWN:
