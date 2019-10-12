@@ -1,14 +1,12 @@
 from collections import namedtuple, UserDict, Counter, defaultdict
 
 import numpy as np
-from pomegranate import HiddenMarkovModel, DiscreteDistribution, State
+from pomegranate import HiddenMarkovModel, DiscreteDistribution
 
 from processing import convert_to_pattern, clear_diacritics, merge_diacritics, extract_diacritics
 
 FakeState = namedtuple('FakeState', 'name')
 UNKNOWN = '<unk>'
-START = '<s>'
-END = '</s>'
 
 
 class DefaultStateDict(UserDict):
@@ -47,20 +45,27 @@ class MostFrequentPatternDiacritizer:
                 for u_w in undiacritized_words_sequence]
 
 
-class BigramHMMPatternDiacritizer(HiddenMarkovModel):
+class BigramHMMPatternDiacritizer:
     """
-    Diacritizer that choose the most probable diacritization for the pattern of the word using an HMM with one step look
-    behind. If not found, the word is left undiacritized.
+    Diacritizer that choose the most probable diacritization for the pattern of the word using a first order HMM.
+    If a word is not found, it is left undiacritized.
     """
 
     def __init__(self, diacritized_word_sequences, epsilon=0.01):
-        super(BigramHMMPatternDiacritizer, self).__init__('BigramHMMPatternDiacritizer')
+        """
+        Construct a diacritizer and populate it by the transitions and emission probabilities of the words of the
+        diacritized sentences.
+        :param diacritized_word_sequences: list of sentences where the type of every sentence is list of words.
+        :param epsilon: a small strictly positive number to replace the zero probabilities.
+        """
+        assert isinstance(diacritized_word_sequences, list) and \
+               all(isinstance(s, list) and isinstance(w, str) for s in diacritized_word_sequences for w in s)
+        assert 0 < epsilon < 1
         d_words = []
         d_patterns_bigrams = []
         self.u_words = set()
         print('Extracting the words and generating the required forms...')
         for d_words_sequence in diacritized_word_sequences:
-            d_words_sequence = [START] + d_words_sequence + [END]
             d_words.extend(d_words_sequence)
             u_words = [clear_diacritics(d_w) for d_w in d_words]
             self.u_words.update(u_words)
@@ -72,31 +77,29 @@ class BigramHMMPatternDiacritizer(HiddenMarkovModel):
         d_pattern_u_word_counter = defaultdict(Counter)
         for d_word in d_words:
             d_pattern_u_word_counter[convert_to_pattern(d_word)][clear_diacritics(d_word)] += 1
-        states_distributions = {}
+        states = []
+        distributions = []
         print('Calculating the probabilities...')
         for pattern, u_word_count in d_pattern_u_word_counter.items():
-            if pattern not in (START, END):
-                u_words_emissions = {UNKNOWN: epsilon}
-                u_words_emissions.update({u_word: count/sum(u_word_count.values()) - epsilon/len(u_word_count)
-                                          for u_word, count in u_word_count.items()})
-            else:
-                u_words_emissions = {u_word: 1 for u_word in u_word_count.keys()}
+            u_words_emissions = {UNKNOWN: epsilon}
+            u_words_emissions.update({u_word: count/sum(u_word_count.values()) - epsilon/len(u_word_count)
+                                      for u_word, count in u_word_count.items()})
             emissions_distribution = DiscreteDistribution(u_words_emissions)
-            states_distributions[pattern] = State(emissions_distribution, name=pattern)
-        self.start = states_distributions[START]
-        self.end = states_distributions[END]
-        self.add_states(list(states_distributions.values()))
-        for pattern1 in states_distributions.keys():
-            states = []
-            trans_probs = np.ones(len(states_distributions)) * epsilon
-            for i, (pattern2, state) in enumerate(states_distributions.items()):
-                states.append(state)
+            states.append(pattern)
+            distributions.append(emissions_distribution)
+        transitions = np.ones((len(states), len(states))) * epsilon
+        for i, pattern1 in enumerate(states):
+            for j, (pattern2, distribution) in enumerate(zip(states, distributions)):
                 if (pattern1, pattern2) in patterns_bigrams_counter.keys():
-                    trans_probs[i] += patterns_bigrams_counter[pattern1, pattern2] / patterns_unigrams_counter[pattern1]
-            trans_probs /= trans_probs.sum()
-            self.add_transitions(states_distributions[pattern1], states, trans_probs.tolist())
+                    transitions[i, j] += patterns_bigrams_counter[pattern1, pattern2] /\
+                                         patterns_unigrams_counter[pattern1]
+        transitions /= np.sum(transitions, axis=-1, keepdims=True)
+        transitions -= epsilon / transitions.shape[0]
+        end_probs = (1 - np.sum(transitions, axis=-1, keepdims=True)).flatten()
+        start_probs = np.ones(transitions.shape[0]) / transitions.shape[0]
         print('Building the HMM...')
-        self.bake(verbose=True)
+        self.model = HiddenMarkovModel.from_matrix(transitions, distributions, start_probs, end_probs, states,
+                                                   self.__class__.__name__, merge=None, verbose=True)
 
     def predict(self, undiacritized_words_sequence):
         assert isinstance(undiacritized_words_sequence, list) and all(isinstance(w, str) for w in
@@ -107,8 +110,7 @@ class BigramHMMPatternDiacritizer(HiddenMarkovModel):
                 sequence.append(UNKNOWN)
             else:
                 sequence.append(u_w)
-        predicted_sequence = [state.name for num, state in
-                              super(BigramHMMPatternDiacritizer, self).viterbi(sequence + [END])[1][1:-1]]
+        predicted_sequence = [state.name for num, state in self.model.viterbi(sequence)[1][1:-1]]
         for i in range(len(predicted_sequence)):
             if sequence[i] == UNKNOWN:
                 predicted_sequence[i] = undiacritized_words_sequence[i]
