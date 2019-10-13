@@ -1,4 +1,6 @@
 from collections import UserDict, Counter, defaultdict
+from concurrent.futures import ThreadPoolExecutor as PoolExecutor, wait
+from threading import Lock
 
 import numpy as np
 from pomegranate import HiddenMarkovModel, DiscreteDistribution
@@ -65,37 +67,40 @@ class BigramHMMPatternDiacritizer:
         assert isinstance(diacritized_word_sequences, list) and \
                all(isinstance(s, list) and isinstance(w, str) for s in diacritized_word_sequences for w in s)
         assert 0 < epsilon < 1
+        self.lock = Lock()
         d_words = []
-        d_patterns_bigrams = []
+        self.d_patterns_bigrams = []
         self.u_patterns = set()  # Needed for checking the out-of-vocabulary patterns in predict function.
         print('Extracting the words and generating the required forms...')
+        futures = []
+        pool_executor = PoolExecutor()
         for d_words_sequence in diacritized_word_sequences:
             d_words.extend(d_words_sequence)
-            self.u_patterns.update([convert_to_pattern(clear_diacritics(d_w)) for d_w in d_words])
-            for d_w1, d_w2 in zip(d_words_sequence[:-1], d_words_sequence[1:]):
-                d_patterns_bigrams.append((convert_to_pattern(d_w1), convert_to_pattern(d_w2)))
+            futures.append(pool_executor.submit(self._extract_words_generate_patterns, d_words_sequence))
+        wait(futures)
+        futures.clear()
         print('Indexing...')
-        patterns_unigrams_counter = Counter([convert_to_pattern(d_w) for d_w in d_words])  # d_pattern: count.
-        patterns_bigrams_counter = Counter(d_patterns_bigrams)  # (d_pattern1, d_pattern2): count.
-        d_pattern_u_pattern_counter = defaultdict(Counter)  # (d_pattern, u_pattern): count.
-        for d_word in d_words:
-            d_pattern_u_pattern_counter[convert_to_pattern(d_word)][convert_to_pattern(clear_diacritics(d_word))] += 1
-        patterns_start_counter = Counter([s[0] for s in diacritized_word_sequences])
+        f1 = pool_executor.submit(lambda: Counter([convert_to_pattern(d_w) for d_w in d_words]))
+        f2 = pool_executor.submit(lambda: Counter(self.d_patterns_bigrams))
+        f3 = pool_executor.submit(self._generate_d_pattern_u_pattern, d_words, diacritized_word_sequences)
+        wait([f1, f2, f3])
+        patterns_unigrams_counter = f1.result()
+        patterns_bigrams_counter = f2.result()
+        d_pattern_u_pattern_counter, patterns_start_counter = f3.result()
+        print('Calculating the emissions...')
         states = []  # Patterns.
-        distributions = []  # Emissions probabilities.
-        print('Calculating the probabilities...')
         for pattern, u_pattern_count in d_pattern_u_pattern_counter.items():
-            u_patterns_emissions = {UNKNOWN: epsilon}
-            u_patterns_emissions.update({u_pattern: count/sum(u_pattern_count.values()) - epsilon/len(u_pattern_count)
-                                         for u_pattern, count in u_pattern_count.items()})
-            emissions_distribution = DiscreteDistribution(u_patterns_emissions)
+            futures.append(pool_executor.submit(self._calculate_emissions, u_pattern_count, epsilon))
             states.append(pattern)
-            distributions.append(emissions_distribution)
+        wait(futures)
+        distributions = [f.result() for f in futures]  # Emissions probabilities.
+        pool_executor.shutdown()
+        print('Calculating the transitions...')
         transitions = np.ones((len(states), len(states))) * epsilon  # Initialize with a small strictly positive number.
         for i, d_pattern1 in enumerate(states):
             for j, (d_pattern2, distribution) in enumerate(zip(states, distributions)):
                 if (d_pattern1, d_pattern2) in patterns_bigrams_counter.keys():
-                    transitions[i, j] += patterns_bigrams_counter[d_pattern1, d_pattern2] /\
+                    transitions[i, j] += patterns_bigrams_counter[d_pattern1, d_pattern2] / \
                                          patterns_unigrams_counter[d_pattern1]  # Add the true probability of the pair.
         transitions /= np.sum(transitions, axis=-1, keepdims=True)  # Normalize everything.
         transitions -= epsilon / transitions.shape[0]  # Remove the probabilities of the end state.
@@ -131,3 +136,26 @@ class BigramHMMPatternDiacritizer:
                 predicted_sequence[i] = merge_diacritics(undiacritized_words_sequence[i],
                                                          extract_diacritics(predicted_sequence[i]))
         return predicted_sequence
+
+    def _extract_words_generate_patterns(self, d_words_sequence):
+        d_patterns_bigrams = []
+        for d_w1, d_w2 in zip(d_words_sequence[:-1], d_words_sequence[1:]):
+            d_patterns_bigrams.append((convert_to_pattern(d_w1), convert_to_pattern(d_w2)))
+        with self.lock:
+            self.u_patterns.update([convert_to_pattern(clear_diacritics(d_w)) for d_w in d_words_sequence])
+            self.d_patterns_bigrams.extend(d_patterns_bigrams)
+
+    @staticmethod
+    def _generate_d_pattern_u_pattern(d_words, diacritized_word_sequences):
+        d_pattern_u_pattern_counter = defaultdict(Counter)  # (d_pattern, u_pattern): count.
+        for d_word in d_words:
+            d_pattern_u_pattern_counter[convert_to_pattern(d_word)][convert_to_pattern(clear_diacritics(d_word))] += 1
+        patterns_start_counter = Counter([s[0] for s in diacritized_word_sequences])
+        return d_pattern_u_pattern_counter, patterns_start_counter
+
+    @staticmethod
+    def _calculate_emissions(u_pattern_count, epsilon):
+        u_patterns_emissions = {UNKNOWN: epsilon}
+        u_patterns_emissions.update({u_pattern: count / sum(u_pattern_count.values()) - epsilon / len(u_pattern_count)
+                                     for u_pattern, count in u_pattern_count.items()})
+        return DiscreteDistribution(u_patterns_emissions)
