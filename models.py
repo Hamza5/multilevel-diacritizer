@@ -1,11 +1,13 @@
 from collections import UserDict, Counter, defaultdict
 from concurrent.futures import ThreadPoolExecutor as PoolExecutor, wait, as_completed
+from os import cpu_count
 
 import numpy as np
 
 from processing import convert_to_pattern, clear_diacritics, merge_diacritics, extract_diacritics
 
 UNKNOWN = '<unk>'
+MAX_PARALLEL_RUNS = cpu_count()
 
 
 class IndexDict(UserDict):
@@ -133,7 +135,7 @@ class BigramHMMPatternDiacritizer:
 
         d_words = []
         futures = []
-        pool_executor = PoolExecutor()
+        pool_executor = PoolExecutor(MAX_PARALLEL_RUNS)
         for d_words_sequence in diacritized_word_sequences:
             d_words.extend(d_words_sequence)
             futures.append(pool_executor.submit(extract_words_generate_patterns, d_words_sequence))
@@ -157,7 +159,7 @@ class BigramHMMPatternDiacritizer:
             patterns_start_counter = Counter([convert_to_pattern(s[0]) for s in diacritized_word_sequences])
             return d_pattern_u_pattern_counter, patterns_start_counter
 
-        pool_executor = PoolExecutor()
+        pool_executor = PoolExecutor(MAX_PARALLEL_RUNS)
         f1 = pool_executor.submit(lambda: Counter([convert_to_pattern(d_w) for d_w in d_words]))
         f2 = pool_executor.submit(lambda: Counter(d_patterns_bigrams))
         f3 = pool_executor.submit(generate_d_pattern_u_pattern, d_words, diacritized_sequences)
@@ -217,13 +219,20 @@ def viterbi(obs, a, b, pi):
     delta[:, 0] = pi * b[:, obs[0]]
     phi[:, 0] = 0
 
-    for t in range(1, T):
-        for s in range(nStates):
-            delta[s, t] = np.max(delta[:, t - 1] * a[:, s]) * b[s, obs[t]]
-            phi[s, t] = np.argmax(delta[:, t - 1] * a[:, s])
+    pool_executor = PoolExecutor(MAX_PARALLEL_RUNS)
+
+    def update_delta_phi(s, t):
+        delta[s, t] = np.max(delta[:, t - 1] * a[:, s]) * b[s, obs[t]]
+        phi[s, t] = np.argmax(delta[:, t - 1] * a[:, s])
+
+    futures = []
+    for time_step in range(1, T):
+        for state in range(nStates):
+            futures.append(pool_executor.submit(update_delta_phi, state, time_step))
+    wait(futures)
 
     path[T - 1] = np.argmax(delta[:, T - 1])
-    for t in range(T - 2, -1, -1):
-        path[t] = phi[path[t + 1], t + 1]
+    for time_step in range(T - 2, -1, -1):
+        path[time_step] = phi[path[time_step + 1], time_step + 1]
 
     return path
