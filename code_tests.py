@@ -1,6 +1,9 @@
 import unittest
 from random import randint, choices, choice
 
+import numpy as np
+
+from models import BigramHMMPatternDiacritizer
 from processing import *
 
 
@@ -76,6 +79,44 @@ class ProcessingFunctionsTestCase(unittest.TestCase):
         }
         for word, pattern in words_patterns.items():
             self.assertEqual(convert_to_pattern(word), pattern)
+
+
+class HMMTestCase(unittest.TestCase):
+
+    def setUp(self):
+        self.arabic_letters = [chr(x) for x in list(range(0x0621, 0x63B)) + list(range(0x0641, 0x064B))]
+        self.latin_letters = [chr(x) for x in range(ord('A'), ord('z')+1)]
+        self.diacritics = list(DIACRITICS.union({''}))
+        random_sentences = []
+        for i in range(50):
+            random_sentence = []
+            for j in range(randint(2, 10)):
+                word = choices(self.arabic_letters, k=randint(2, 8))
+                word = ''.join([l + d for l, d in zip(word, choices(self.diacritics, k=len(word)))])
+                random_sentence.append(word)
+            random_sentences.append(random_sentence)
+        for s in choices(random_sentences, k=5):
+            s.insert(randint(0, len(s)), str(randint(0, 9999)))
+            s.insert(randint(0, len(s)), ''.join(choices(self.latin_letters, k=randint(1, 5))))
+        self.hmm = BigramHMMPatternDiacritizer(random_sentences)
+
+    def test_arrays_indexes_sizes(self):
+        self.assertEqual(self.hmm.transitions.shape[0], self.hmm.transitions.shape[1])
+        self.assertEqual(self.hmm.transitions.shape[0], self.hmm.emissions.shape[0])
+        self.assertEqual(self.hmm.priors.shape[0], self.hmm.transitions.shape[0])
+        self.assertEqual(len(self.hmm.d_patterns_indexes), self.hmm.emissions.shape[0])
+        self.assertEqual(len(self.hmm.u_patterns_indexes), self.hmm.emissions.shape[1])
+
+    def test_array_sums(self):
+        self.assertTrue(np.all(np.abs(np.sum(self.hmm.transitions, axis=-1) -
+                                      np.ones(self.hmm.transitions.shape[0])) < 1e-4),
+                        'Transitions sums:\n' + str(np.sum(self.hmm.transitions, axis=-1)) +
+                        '\nExpected:\n' + str(np.ones(self.hmm.transitions.shape[0])))
+        self.assertTrue(np.all(np.abs(np.sum(self.hmm.emissions, axis=-1) -
+                                      np.ones(self.hmm.emissions.shape[0])) < 1e-4),
+                        'Emissions sums: ' + str(np.sum(self.hmm.emissions, axis=-1)) +
+                        '\nExpected:\n' + str(np.ones(self.hmm.emissions.shape[0])))
+        self.assertAlmostEqual(sum(self.hmm.priors), 1, 4)
 
 
 if __name__ == '__main__':

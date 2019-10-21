@@ -17,6 +17,16 @@ MIN_STEM_LEN = 2
 ORDINARY_ARABIC_LETTERS_PATTERN = re.compile(r'[بتثجحخدذرزسشصضطظعغفقكلمنه]')
 DIACRITICS = set(chr(code) for code in range(0x064B, 0x0653))
 DIACRITICS_PATTERN = re.compile('['+''.join(DIACRITICS)+']')
+NUMBER_PATTERN = re.compile(r'\d+(?:\.\d+)?')
+ARABIC_LETTERS = frozenset([chr(x) for x in (list(range(0x0621, 0x63B)) + list(range(0x0641, 0x064B)))])
+ARABIC_NUMBER_PATTERN = re.compile('((?:['+''.join(ARABIC_LETTERS)+']['+''.join(DIACRITICS)+r']*)+|\d+(?:\.\d+)?)')
+SENTENCE_SEPARATORS = ';,،؛.:؟!'
+PUNCTUATION = SENTENCE_SEPARATORS + '۩﴿﴾«»ـ' +\
+              ''.join([chr(x) for x in range(0x0021, 0x0030)]+[chr(x) for x in range(0x003A, 0x0040)] +
+                      [chr(x) for x in range(0x005B, 0x0060)]+[chr(x) for x in range(0x007B, 0x007F)])
+PUNCTUATION_PATTERN = re.compile('['+''.join(PUNCTUATION)+']+')
+NUMBER = '0'
+FOREIGN = '<FOR>'
 
 
 def separate_affixes(u_word: str) -> (str, str, str):
@@ -93,3 +103,16 @@ def convert_to_pattern(word: str) -> str:
     prefix, stem, suffix = separate_affixes(clear_diacritics(word))
     stem = ORDINARY_ARABIC_LETTERS_PATTERN.sub('ح', stem)
     return merge_diacritics(prefix + stem + suffix, extract_diacritics(word))
+
+
+def convert_non_arabic(text):
+    assert isinstance(text, str)
+    r = ''
+    for x in ARABIC_NUMBER_PATTERN.split(text):
+        if NUMBER_PATTERN.match(x):
+            r += NUMBER
+        elif x.isspace() or ARABIC_NUMBER_PATTERN.match(x) or PUNCTUATION_PATTERN.match(x):
+            r += x
+        elif x != '':
+            r += FOREIGN
+    return r

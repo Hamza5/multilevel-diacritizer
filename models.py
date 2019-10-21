@@ -4,7 +4,8 @@ from os import cpu_count
 
 import numpy as np
 
-from processing import convert_to_pattern, clear_diacritics, merge_diacritics, extract_diacritics
+from processing import convert_to_pattern, clear_diacritics, merge_diacritics, extract_diacritics, convert_non_arabic, \
+    FOREIGN, NUMBER
 
 UNKNOWN = '<unk>'
 MAX_PARALLEL_RUNS = cpu_count()
@@ -38,6 +39,7 @@ class MostFrequentPatternDiacritizer:
         """
         assert isinstance(diacritized_word_sequences, list) and \
                all(isinstance(s, list) and isinstance(w, str) for s in diacritized_word_sequences for w in s)
+        diacritized_word_sequences = [[convert_non_arabic(w) for w in s] for s in diacritized_word_sequences]
         diacritized_words = []
         for d_sequence in diacritized_word_sequences:
             diacritized_words.extend(d_sequence)
@@ -66,7 +68,7 @@ class BigramHMMPatternDiacritizer:
     If a word is not found, it is left undiacritized.
     """
 
-    def __init__(self, diacritized_sequences, epsilon=0.001):
+    def __init__(self, diacritized_sequences, epsilon=0.01):
         """
         Construct a diacritizer and populate it by the transitions and emission probabilities of the words of the
         diacritized sentences.
@@ -78,13 +80,13 @@ class BigramHMMPatternDiacritizer:
         assert 0 < epsilon < 1
 
         print('Extracting the words and generating the required forms...')
-        self.d_patterns_indexes = IndexDict()
+        self.d_patterns_indexes = IndexDict({NUMBER: 1, FOREIGN: 1})
         d_words, self.u_patterns_indexes, d_patterns_bigrams = self.generate_words_patterns_bigrams(
             diacritized_sequences)
 
         print('Indexing...')
         d_patterns_unigrams_counter, d_patterns_bigrams_counter, d_pattern_u_pattern_counter, patterns_start_counter = \
-            self.calculate_frequencies(diacritized_sequences, d_words, d_patterns_bigrams)
+            self.calculate_frequencies(diacritized_sequences, d_words, d_patterns_bigrams, self.d_patterns_indexes)
 
         print('Calculating the emissions...')
         self.emissions = self.calculate_emissions(d_pattern_u_pattern_counter, self.u_patterns_indexes,
@@ -108,7 +110,7 @@ class BigramHMMPatternDiacritizer:
                                                                       undiacritized_words_sequence)
         sequence = []
         for u_w in undiacritized_words_sequence:
-            u_p = convert_to_pattern(u_w)
+            u_p = convert_to_pattern(convert_non_arabic(u_w))
             if u_p not in self.u_patterns_indexes.keys():
                 sequence.append(self.u_patterns_indexes[UNKNOWN])
             else:
@@ -117,7 +119,7 @@ class BigramHMMPatternDiacritizer:
                               viterbi(np.array(sequence, dtype=np.int), self.transitions, self.emissions, self.priors)]
         restored_sequence = []
         for i in range(len(predicted_sequence)):
-            if sequence[i] == UNKNOWN:
+            if sequence[i] in (UNKNOWN, FOREIGN, '0'):
                 restored_sequence.append(undiacritized_words_sequence[i])
             else:
                 restored_sequence.append(merge_diacritics(undiacritized_words_sequence[i],
@@ -139,7 +141,7 @@ class BigramHMMPatternDiacritizer:
         for d_words_sequence in diacritized_word_sequences:
             d_words.extend(d_words_sequence)
             futures.append(pool_executor.submit(extract_words_generate_patterns, d_words_sequence))
-        u_patterns_indexes = IndexDict({UNKNOWN: 1})
+        u_patterns_indexes = IndexDict({UNKNOWN: 1, NUMBER: 1, FOREIGN: 1})
         d_patterns_bigrams = []
         for f in as_completed(futures):
             u_ps, d_ps_bgs = f.result()
@@ -149,13 +151,14 @@ class BigramHMMPatternDiacritizer:
         return d_words, u_patterns_indexes, d_patterns_bigrams
 
     @staticmethod
-    def calculate_frequencies(diacritized_sequences, d_words, d_patterns_bigrams):
+    def calculate_frequencies(diacritized_sequences, d_words, d_patterns_bigrams, d_patterns_indexes):
 
         def generate_d_pattern_u_pattern(d_words, diacritized_word_sequences):
             d_pattern_u_pattern_counter = defaultdict(Counter)  # (d_pattern, u_pattern): count.
             for d_word in d_words:
-                d_pattern_u_pattern_counter[convert_to_pattern(d_word)][
-                    convert_to_pattern(clear_diacritics(d_word))] += 1
+                d_pattern = convert_to_pattern(d_word)
+                d_patterns_indexes[d_pattern] = 1  # This change will be reflected outside the function.
+                d_pattern_u_pattern_counter[d_pattern][convert_to_pattern(clear_diacritics(d_word))] += 1
             patterns_start_counter = Counter([convert_to_pattern(s[0]) for s in diacritized_word_sequences])
             return d_pattern_u_pattern_counter, patterns_start_counter
 
@@ -175,19 +178,23 @@ class BigramHMMPatternDiacritizer:
 
     @staticmethod
     def calculate_emissions(d_pattern_u_pattern_counter, u_patterns_indexes, d_patterns_indexes, epsilon):
-        emissions = np.zeros((len(d_pattern_u_pattern_counter), len(u_patterns_indexes)))
-        for i, (d_pattern, u_pattern_count) in enumerate(d_pattern_u_pattern_counter.items()):
-            d_patterns_indexes[d_pattern] = 1  # This change will be reflected outside the function.
+        emissions = np.zeros((len(d_patterns_indexes), len(u_patterns_indexes)))
+        for d_pattern, u_pattern_count in d_pattern_u_pattern_counter.items():
+            i = d_patterns_indexes[d_pattern]
+            emissions[i, u_patterns_indexes[UNKNOWN]] = epsilon
             for u_pattern, count in u_pattern_count.items():
-                emissions[i, u_patterns_indexes[UNKNOWN]] = epsilon
                 emissions[i, u_patterns_indexes[u_pattern]] = count / sum(u_pattern_count.values()) - \
                                                               epsilon / len(u_pattern_count)
+        emissions[d_patterns_indexes[NUMBER]] = np.zeros(emissions.shape[1])
+        emissions[d_patterns_indexes[NUMBER]][u_patterns_indexes[NUMBER]] = 1
+        emissions[d_patterns_indexes[FOREIGN]] = np.zeros(emissions.shape[1])
+        emissions[d_patterns_indexes[FOREIGN]][u_patterns_indexes[FOREIGN]] = 1
         return emissions
 
     @staticmethod
     def calculate_transitions(d_patterns_indexes, d_patterns_bigrams_counter, d_patterns_unigrams_counter, epsilon):
         # Initialize with a small strictly positive number.
-        transitions = np.ones((len(d_patterns_indexes), len(d_patterns_indexes))) * epsilon
+        transitions = np.ones((len(d_patterns_indexes), len(d_patterns_indexes))) * (epsilon / len(d_patterns_indexes))
         # Calculate the real probabilities.
         for d_pattern1, d_pattern2 in d_patterns_bigrams_counter.keys():
             i = d_patterns_indexes[d_pattern1]
@@ -200,7 +207,7 @@ class BigramHMMPatternDiacritizer:
 
     @staticmethod
     def calculate_priors(patterns_start_counter, d_patterns_indexes, epsilon):
-        priors = np.ones(len(d_patterns_indexes)) * epsilon
+        priors = np.ones(len(d_patterns_indexes)) * epsilon / len(d_patterns_indexes)
         for state in patterns_start_counter.keys():
             priors[d_patterns_indexes[state]] += patterns_start_counter[state] / sum(patterns_start_counter.values())
         priors /= np.sum(priors)
