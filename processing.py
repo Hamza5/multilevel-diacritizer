@@ -1,20 +1,21 @@
 import re
 from typing import Iterable
 # The prefixes and suffixes that should be separated from the stem before converting it to a pattern
-SEPARATED_PREFIXES = {'ل', 'م', 'ك', 'ف', 'ت', 'ب', 'ن', 'ال', 'لل'}
+SEPARATED_PREFIXES = {'ل', 'ك', 'ف', 'ت', 'ب', 'ن', 'ال', 'لل', 'أ'}
 SEPARATED_PREFIXES.update({x + 'ال' for x in {'ك', 'ف', 'و', 'ب'}})
-SEPARATED_PREFIXES.update({x + 'الم' for x in {'ك', 'ف', 'و', 'ب'}})
 SEPARATED_PREFIXES.update({'س' + x for x in {'ي', 'أ', 'ت', 'ن'}})
-SEPARATED_PREFIXES.update({'و' + x for x in {'بال', 'كال', 'ت', 'ن', 'بالم', 'كالم'}})
-SEPARATED_PREFIXES.update({'ف' + x for x in {'بال', 'كال', 'ي', 'أ', 'ت', 'ن', 'بالم', 'كالم'}})
+SEPARATED_PREFIXES.update({'و' + x for x in {'بال', 'كال', 'ت', 'أ', 'ن'}})
+SEPARATED_PREFIXES.update({'ف' + x for x in {'بال', 'كال', 'ي', 'أ', 'ت', 'ن'}})
 SEPARATED_PREFIXES.update({x + 'ست' for x in {'ي', 'ا', 'أ', 'ت', 'ن'}})
 SEPARATED_PREFIXES.update({'و' + x + 'ست' for x in {'ي', 'ا', 'أ', 'ت', 'ن'}})
 SEPARATED_PREFIXES.update({'ف' + x + 'ست' for x in {'ي', 'ا', 'أ', 'ت', 'ن'}})
 SEPARATED_PREFIXES.update({'باست'})
 SEPARATED_SUFFIXES = {'ت', 'ك', 'ه', 'ها', 'ون', 'ين', 'ان', 'كم', 'هم', 'كن', 'هن', 'كما', 'هما'}
-SEPARATED_SUFFIXES.update({'ت' + x for x in {'ه', 'ك', 'ين', 'ان', 'كم', 'هم', 'كن', 'هن', 'كما', 'هما', 'ما', 'ن'}})
+SEPARATED_SUFFIXES.update({'ت' + x for x in {'ه', 'ك', 'ين', 'ان', 'كم', 'هم', 'كن', 'هن', 'كما', 'هما', 'ها', 'ما',
+                                             'ن'}})
 MIN_STEM_LEN = 2
 ORDINARY_ARABIC_LETTERS_PATTERN = re.compile(r'[بتثجحخدذرزسشصضطظعغفقكلمنه]')
+HAMZAT_PATTERN = re.compile(r'[ءأآؤئ]')
 DIACRITICS = set(chr(code) for code in range(0x064B, 0x0653))
 DIACRITICS_PATTERN = re.compile('['+''.join(DIACRITICS)+']')
 NUMBER_PATTERN = re.compile(r'\d+(?:\.\d+)?')
@@ -101,6 +102,7 @@ def convert_to_pattern(word: str) -> str:
     """
     assert isinstance(word, str)
     prefix, stem, suffix = separate_affixes(clear_diacritics(word))
+    stem = HAMZAT_PATTERN.sub('ء', stem)
     stem = ORDINARY_ARABIC_LETTERS_PATTERN.sub('ح', stem)
     return merge_diacritics(prefix + stem + suffix, extract_diacritics(word))
 

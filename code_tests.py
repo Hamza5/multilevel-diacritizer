@@ -70,15 +70,17 @@ class ProcessingFunctionsTestCase(unittest.TestCase):
             'نساء': 'نحاء',
             'صفات': 'ححات',
             'جَعَلَهُ': 'حَحَحَهُ',
-            'وسُؤْرُ': 'وحُؤْحُ',
+            'وسُؤْرُ': 'وحُءْحُ',
             'ل': 'ح',
-            'مضمون': 'مححون',
-            'ورأيتهما': 'وحأيتهما',
+            'مضمون': 'حححون',
+            'ورأيتهما': 'وحءيتهما',
             'فيضحكن': 'فيححكن',
             'تلعبان': 'تحححان',
+            'استجمع': 'استححح',
+            'أكل': 'أحح',
         }
         for word, pattern in words_patterns.items():
-            self.assertEqual(convert_to_pattern(word), pattern)
+            self.assertEqual(pattern, convert_to_pattern(word))
 
 
 class HMMTestCase(unittest.TestCase):
