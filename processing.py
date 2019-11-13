@@ -107,7 +107,12 @@ def convert_to_pattern(word: str) -> str:
     return merge_diacritics(prefix + stem + suffix, extract_diacritics(word))
 
 
-def convert_non_arabic(text):
+def convert_non_arabic(text) -> str:
+    """
+    Substitute non Arabic tokens other than spaces and punctuation with the corresponding replacements.
+    :param text: str, text containing non-Arabic characters.
+    :return: str, the text with non-Arabic tokens replaced.
+    """
     assert isinstance(text, str)
     r = ''
     for x in ARABIC_NUMBER_PATTERN.split(text):
