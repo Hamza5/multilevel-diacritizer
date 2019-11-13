@@ -52,7 +52,7 @@ class PatternsDiacritization(Text2TextProblem):
 
 
 if __name__ == '__main__':
-    from tensor2tensor import problems
+    from tensor2tensor import problems, models
     from tensor2tensor.utils import trainer_lib
     problem_name = 'patterns_diacritization'
     model_name = 'transformer'
