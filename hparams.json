@@ -1,0 +1,6 @@
+{
+  "max_length": 32,
+  "batch_shuffle_size": 128,
+  "batch_size": 1024,
+  "learning_rate_warmup_steps": 5000
+}
