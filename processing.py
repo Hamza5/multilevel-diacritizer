@@ -102,6 +102,7 @@ def convert_to_pattern(word: str) -> str:
     """
     assert isinstance(word, str)
     prefix, stem, suffix = separate_affixes(clear_diacritics(word))
+    stem = stem.replace('ى', 'ا')
     stem = HAMZAT_PATTERN.sub('ء', stem)
     stem = ORDINARY_ARABIC_LETTERS_PATTERN.sub('ح', stem)
     return merge_diacritics(prefix + stem + suffix, extract_diacritics(word))

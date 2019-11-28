@@ -60,7 +60,7 @@ class ProcessingFunctionsTestCase(unittest.TestCase):
             i += randint(2, 10)
         self.assertEqual(len(convert_to_pattern(random_diacritized_text)), len(random_diacritized_text))
         words_patterns = {
-            'المعْنَى': 'الححْحَى',
+            'المعْنَى': 'الححْحَا',
             'دلالة': 'ححاحة',
             'بالوضع': 'بالوحح',
             'الجمع': 'الححح',
