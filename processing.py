@@ -20,7 +20,9 @@ DIACRITICS = set(chr(code) for code in range(0x064B, 0x0653))
 DIACRITICS_PATTERN = re.compile('['+''.join(DIACRITICS)+']')
 NUMBER_PATTERN = re.compile(r'\d+(?:\.\d+)?')
 ARABIC_LETTERS = frozenset([chr(x) for x in (list(range(0x0621, 0x63B)) + list(range(0x0641, 0x064B)))])
-ARABIC_NUMBER_PATTERN = re.compile('((?:['+''.join(ARABIC_LETTERS)+']['+''.join(DIACRITICS)+r']*)+|\d+(?:\.\d+)?)')
+ARABIC_NUMBER_SPACE_PATTERN = re.compile(
+    '((?:[' + ''.join(ARABIC_LETTERS) + '][' + ''.join(DIACRITICS) + r']*)+|\d+(?:\.\d+)?|\s+)'
+)
 SENTENCE_SEPARATORS = ';,،؛.:؟!'
 PUNCTUATION = SENTENCE_SEPARATORS + '۩﴿﴾«»ـ' +\
               ''.join([chr(x) for x in range(0x0021, 0x0030)]+[chr(x) for x in range(0x003A, 0x0040)] +
@@ -36,7 +38,7 @@ def separate_affixes(u_word: str) -> (str, str, str):
     :param u_word: str, an undiacritized word.
     :return: (str, str, str), prefix, stem and suffix.
     """
-    assert isinstance(u_word, str) and set(u_word).intersection(DIACRITICS) == set()
+    assert isinstance(u_word, str) and set(u_word).intersection(DIACRITICS) == set() and ' ' not in u_word
     possible_prefixes = sorted([s for s in SEPARATED_PREFIXES if u_word.startswith(s)], key=len, reverse=True)
     possible_suffixes = sorted([s for s in SEPARATED_SUFFIXES if u_word.endswith(s)], key=len, reverse=True)
     possible_prefixes.append('')
@@ -94,18 +96,22 @@ def merge_diacritics(u_text: str, diacritics: Iterable) -> str:
     return ''.join([l+''.join(d) for l, d in zip(u_text, diacritics)])
 
 
-def convert_to_pattern(word: str) -> str:
+def convert_to_pattern(text: str) -> str:
     """
-    Return the corresponding pattern of a given word.
-    :param word: str, the word to convert.
-    :return: str, the pattern of the word.
+    Transform every Arabic word in the text to its equivalent pattern.
+    :param text: str, the text to convert.
+    :return: str, the equivalent patterns version.
     """
-    assert isinstance(word, str)
-    prefix, stem, suffix = separate_affixes(clear_diacritics(word))
-    stem = stem.replace('ى', 'ا')
-    stem = HAMZAT_PATTERN.sub('ء', stem)
-    stem = ORDINARY_ARABIC_LETTERS_PATTERN.sub('ح', stem)
-    return merge_diacritics(prefix + stem + suffix, extract_diacritics(word))
+    def word_to_pattern(word: str) -> str:
+        if not word or word.isspace() or not ARABIC_NUMBER_SPACE_PATTERN.match(word):
+            return word
+        prefix, stem, suffix = separate_affixes(clear_diacritics(word))
+        stem = stem.replace('ى', 'ا')
+        stem = HAMZAT_PATTERN.sub('ء', stem)
+        stem = ORDINARY_ARABIC_LETTERS_PATTERN.sub('ح', stem)
+        return merge_diacritics(prefix + stem + suffix, extract_diacritics(word))
+    assert isinstance(text, str)
+    return ''.join(map(word_to_pattern, ARABIC_NUMBER_SPACE_PATTERN.split(text)))
 
 
 def convert_non_arabic(text) -> str:
@@ -116,10 +122,10 @@ def convert_non_arabic(text) -> str:
     """
     assert isinstance(text, str)
     r = ''
-    for x in ARABIC_NUMBER_PATTERN.split(text):
+    for x in ARABIC_NUMBER_SPACE_PATTERN.split(text):
         if NUMBER_PATTERN.match(x):
             r += NUMBER
-        elif x.isspace() or ARABIC_NUMBER_PATTERN.match(x) or PUNCTUATION_PATTERN.match(x):
+        elif ARABIC_NUMBER_SPACE_PATTERN.match(x) or PUNCTUATION_PATTERN.match(x):
             r += x
         elif x != '':
             r += FOREIGN
