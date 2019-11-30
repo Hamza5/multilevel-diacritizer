@@ -3,13 +3,17 @@ import re
 import sys
 import zipfile
 
+import numpy as np
+import tensorflow as tf
+
 from tensor2tensor.data_generators.problem import DatasetSplit
 from tensor2tensor.data_generators.text_problems import Text2TextProblem, VocabType
+from tensor2tensor.data_generators.text_encoder import TokenTextEncoder, EOS_ID, PAD_ID
 from tensor2tensor.data_generators.generator_utils import maybe_download
 from tensor2tensor import models
-from tensor2tensor.utils import registry, trainer_lib, hparams_lib
+from tensor2tensor.utils import registry, trainer_lib, hparams_lib, t2t_model
 
-from processing import convert_to_pattern, convert_non_arabic, clear_diacritics
+from processing import convert_to_pattern, convert_non_arabic, clear_diacritics, NUMBER, FOREIGN
 
 
 @registry.register_problem
@@ -40,9 +44,10 @@ class PatternsDiacritization(Text2TextProblem):
     def get_or_create_vocab(self, data_dir, tmp_dir, force_get=False):
         vocab_file_path = os.path.join(data_dir, self.vocab_filename)
         if not os.path.exists(vocab_file_path):
-            vocab = {self.oov_token}
+            vocab = set()
             for s in self.generate_text_for_vocab(data_dir, tmp_dir):
                 vocab.update(s.split(' '))
+            vocab = [self.oov_token, NUMBER, FOREIGN] + list(vocab)
             with open(os.path.join(data_dir, self.vocab_filename), 'w', encoding='utf-8') as vocab_file:
                 for p in vocab:
                     print(p, file=vocab_file)
@@ -79,6 +84,25 @@ class PatternsDiacritization(Text2TextProblem):
         return True
 
 
+def encode_batch(input_encoder, input_str_list):
+    """List of str to features arrays, ready for inference"""
+    assert isinstance(input_encoder, TokenTextEncoder)
+    assert isinstance(input_str_list, list) and all(isinstance(s, str) for s in input_str_list)
+    inputs = list(map(lambda s: input_encoder.encode(s) + [EOS_ID], input_str_list))
+    max_length = len(max(inputs, key=len))
+    inputs = np.stack(list(map(lambda s: s + [PAD_ID] * (max_length - len(s)), inputs)))
+    return inputs.reshape((*inputs.shape, 1))
+
+
+def decode_batch(target_encoder, indexes_batch):
+    """2D array of ints to list of str"""
+    assert isinstance(target_encoder, TokenTextEncoder)
+    assert isinstance(indexes_batch, np.ndarray) and indexes_batch.ndim == 2
+    indexes_batch = list(map(lambda idx: list(idx[idx > EOS_ID]), indexes_batch))  # EOS_ID = 1, PAD_ID = 0
+    decoded_batch = list(map(lambda idx: target_encoder.decode(idx), indexes_batch))
+    return decoded_batch
+
+
 PROBLEM_NAME = '_'.join(map(str.lower, re.findall('[A-Z][a-z]*', PatternsDiacritization.__name__)))
 
 
@@ -105,3 +129,38 @@ def train(model_name, data_dir, output_dir, hparams_set, override_hparams_file_p
                                                sys.maxsize, eval_early_stopping_steps=early_stop_steps,
                                                eval_early_stopping_metric='loss')
     experiment.train_and_evaluate()
+
+
+def predict(model_name, data_dir, output_dir, hparams_set, override_hparams_file_path, beam_size, source_file_path,
+            dest_file_path):
+    tfe = tf.contrib.eager
+    tfe.enable_eager_execution()
+    problem = registry.problem(PROBLEM_NAME)
+    assert isinstance(problem, PatternsDiacritization)
+    encoders = problem.feature_encoders(data_dir)
+    checkpoint_path = tf.train.latest_checkpoint(output_dir)
+    hparams = hparams_lib.create_hparams(hparams_set, '', data_dir, PROBLEM_NAME)
+    hparams = hparams_lib.create_hparams_from_json(override_hparams_file_path, hparams)
+    pattern_diacritization_model = models.model(model_name)(hparams, tf.estimator.ModeKeys.PREDICT)
+    assert isinstance(pattern_diacritization_model, t2t_model.T2TModel)
+    if source_file_path:
+        with open(source_file_path, encoding='utf-8') as source_file:
+            sentences = source_file.readlines()
+    else:
+        sentences = []
+        s = input('>>>')
+        while s:
+            sentences.append(s)
+            s = input('>>>')
+    input_patterns_sentences = list(map(lambda s: convert_to_pattern(convert_non_arabic(s)), sentences))
+    encoded_input_batch = encode_batch(encoders['inputs'], input_patterns_sentences)
+    with tfe.restore_variables_on_create(checkpoint_path):
+        encoded_output_batch = pattern_diacritization_model.infer({'inputs': encoded_input_batch},
+                                                                  beam_size=beam_size)['outputs'].numpy()
+    output_patterns_sentences = decode_batch(encoders['targets'], encoded_output_batch)
+    dest_file = sys.stdout
+    if dest_file_path:
+        dest_file = open(dest_file_path, 'w', encoding='utf-8')
+    for s in output_patterns_sentences:
+        print(s, file=dest_file)
+    dest_file.close()
