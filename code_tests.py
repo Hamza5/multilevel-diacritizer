@@ -104,7 +104,8 @@ class ProcessingFunctionsTestCase(unittest.TestCase):
         for _ in range(non_arabic_words_count):
             random_non_arabic_word = ''.join(
                 chr(x) for x in choice([choices(range(ord('0'), ord('9')+1), k=randint(1, 5)),
-                                        choices(range(ord('A'), 256), k=randint(2, 10))])
+                                        choices(list(range(ord('A'), ord('Z'))) + list(range(ord('a'), ord('z')+1))
+                                                + list(range(192, 450)), k=randint(2, 10))])
             )
             words.insert(randint(0, len(words)), random_non_arabic_word)
         random_sentence = ' '.join(words)
