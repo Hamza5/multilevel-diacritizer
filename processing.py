@@ -67,14 +67,14 @@ def extract_diacritics(d_text: str) -> list:
     """
     Return the diacritics from the text while keeping their original positions including the Shaddah marks.
     :param d_text: str, the diacritized text.
-    :return: list, the diacritics. Positions with double diacritics have a tuple as elements.
+    :return: list of str, the diacritics.
     """
     assert isinstance(d_text, str)
     diacritics = []
     for i in range(1, len(d_text)):
         if d_text[i] in DIACRITICS:
             if d_text[i - 1] == 'ّ':
-                diacritics[-1] = (d_text[i - 1], d_text[i])
+                diacritics[-1] = d_text[i - 1] + d_text[i]
             else:
                 diacritics.append(d_text[i])
         elif d_text[i - 1] not in DIACRITICS:
@@ -88,12 +88,12 @@ def merge_diacritics(u_text: str, diacritics: Iterable) -> str:
     """
     Return the diacritized text resulted from merging the text with the diacritics extracted by separate_diacritics.
     :param u_text: str, the undiacritized text.
-    :param diacritics: list of str or tuple, the diacritics. Positions with double diacritics have a tuple as elements.
+    :param diacritics: list of str, the diacritics.
     :return: str, the diacritized text.
     """
     assert isinstance(u_text, str)
     assert isinstance(diacritics, Iterable)
-    return ''.join([l+''.join(d) for l, d in zip(u_text, diacritics)])
+    return ''.join([l+d for l, d in zip(u_text, diacritics)])
 
 
 def convert_to_pattern(text: str) -> str:
