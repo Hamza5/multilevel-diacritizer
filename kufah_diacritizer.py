@@ -1,7 +1,7 @@
 #!/usr/bin/python3
 from argparse import ArgumentParser
 from pathlib import Path
-from models import download_data
+from models import download_data, train
 
 DATA_DIR = Path('data/')
 
@@ -15,4 +15,11 @@ if __name__ == '__main__':
                              default='https://sourceforge.net/projects/tashkeela-processed/files/latest/download')
     args = main_parser.parse_args()
     if args.subcommand == 'download-data':
-        download_data(args.data_dir, args.url)
+        download_data(args.tmp_dir, args.url)
+        print('Generated.')
+    elif args.subcommand == 'train':
+        train(args.data_dir, args.params_dir)
+        print('Trained.')
+    # elif args.subcommand == 'diacritize':
+    #     predict(args.model, args.data_dir, args.output_dir, args.hyper_parameters_set,
+    #             args.override_hyper_parameters_config, args.beam_size, args.input_file, args.output_file)

@@ -30,6 +30,7 @@ PUNCTUATION = SENTENCE_SEPARATORS + '۩﴿﴾«»ـ' +\
 PUNCTUATION_PATTERN = re.compile('['+''.join(PUNCTUATION)+']+')
 NUMBER = '0'
 FOREIGN = '<FOR>'
+UNKNOWN = '<UNK>'
 
 
 def separate_affixes(u_word: str) -> (str, str, str):
