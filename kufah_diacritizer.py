@@ -13,6 +13,13 @@ if __name__ == '__main__':
                              help='Directory used for downloading and extracting the dataset.')
     data_parser.add_argument('--url', '-u', help='URL of the Tashkeela-processed dataset.',
                              default='https://sourceforge.net/projects/tashkeela-processed/files/latest/download')
+    train_parser = subparsers.add_parser('train', help='Train the model on a generated dataset.')
+    train_parser.add_argument('--data-dir', '-d', type=Path, default=DATA_DIR,
+                              help='Directory which contains vocabulary and data files.')
+    train_parser.add_argument('--params-dir', '-p', type=Path, default=PARAMS_DIR,
+                              help='Directory used to store model parameters and training progress values.')
+    train_parser.add_argument('--train-steps', '-s', type=int, default=TRAIN_STEPS,
+                              help='Maximum number of steps before stopping the training.')
     args = main_parser.parse_args()
     if args.subcommand == 'download-data':
         download_data(args.tmp_dir, args.url)
