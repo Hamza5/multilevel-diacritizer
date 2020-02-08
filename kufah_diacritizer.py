@@ -4,6 +4,8 @@ from pathlib import Path
 from models import download_data, train
 
 DATA_DIR = Path('data/')
+PARAMS_DIR = Path('params/')
+TRAIN_STEPS = 10000
 
 if __name__ == '__main__':
     main_parser = ArgumentParser(description='Command-line text diacritics restoration tool.')
@@ -25,7 +27,7 @@ if __name__ == '__main__':
         download_data(args.tmp_dir, args.url)
         print('Generated.')
     elif args.subcommand == 'train':
-        train(args.data_dir, args.params_dir)
+        train(args.data_dir, args.params_dir, args.train_steps)
         print('Trained.')
     # elif args.subcommand == 'diacritize':
     #     predict(args.model, args.data_dir, args.output_dir, args.hyper_parameters_set,
