@@ -1,10 +1,11 @@
 #!/usr/bin/python3
 from argparse import ArgumentParser
 from pathlib import Path
-from models import download_data, train
+from tf_functions import download_data, train
 
 DATA_DIR = Path('data/')
 PARAMS_DIR = Path('params/')
+BATCH_SIZE = 32
 TRAIN_STEPS = 10000
 
 if __name__ == '__main__':
@@ -22,13 +23,12 @@ if __name__ == '__main__':
                               help='Directory used to store model parameters and training progress values.')
     train_parser.add_argument('--train-steps', '-s', type=int, default=TRAIN_STEPS,
                               help='Maximum number of steps before stopping the training.')
+    train_parser.add_argument('--batch-size', '-b', type=int, default=BATCH_SIZE,
+                              help='Maximum number of elements in a single batch.')
     args = main_parser.parse_args()
     if args.subcommand == 'download-data':
         download_data(args.tmp_dir, args.url)
         print('Generated.')
     elif args.subcommand == 'train':
-        train(args.data_dir, args.params_dir, args.train_steps)
+        train(args.data_dir, args.params_dir, args.train_steps, args.batch_size)
         print('Trained.')
-    # elif args.subcommand == 'diacritize':
-    #     predict(args.model, args.data_dir, args.output_dir, args.hyper_parameters_set,
-    #             args.override_hyper_parameters_config, args.beam_size, args.input_file, args.output_file)

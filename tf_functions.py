@@ -6,7 +6,7 @@ from transformers import TFXLNetModel, XLNetConfig
 from processing import DIACRITICS, NUMBER, NUMBER_PATTERN, ARABIC_LETTERS
 
 DATASET_FILE_NAME = 'Tashkeela-processed.zip'
-SEQUENCE_LENGTH = 200  # TODO: Need to change this to a more accurate value.
+SEQUENCE_LENGTH = 100  # TODO: Need to change this to a more accurate value.
 
 
 @tf.function
@@ -33,31 +33,13 @@ def tf_normalize_entities(text: tf.string):
         r'\p{P}+', ''), r'\s{2,}', ' '))
 
 
-# def generate_vocabulary_file(vocabulary_file_path: str, dataset: tf.data.Dataset):
-#     tokens = {NUMBER, FOREIGN}
-#     for w in dataset:
-#         tks = w.numpy().decode('UTF-8').split()
-#         tokens.update(tks)
-#     with tf.io.gfile.GFile(vocabulary_file_path, 'w') as vocabulary_file:
-#         for token in sorted(tokens):
-#             print(token, file=vocabulary_file)
-#
-#
-# def get_vocabulary_table(vocabulary_file_path: str):
-#     vocabulary_table = tf.lookup.StaticVocabularyTable(
-#         tf.lookup.TextFileInitializer(vocabulary_file_path, tf.string, tf.lookup.TextFileIndex.WHOLE_LINE, tf.int64,
-#                                       tf.lookup.TextFileIndex.LINE_NUMBER),
-#         1)
-#     return vocabulary_table
-
-
 CHARS = sorted(ARABIC_LETTERS.union({NUMBER, ' '}))
 DIACS = sorted(DIACRITICS - {'ّ'}) + sorted('ّ'+x for x in (DIACRITICS - {'ّ'}))
 LETTERS_TABLE = tf.lookup.StaticHashTable(
         tf.lookup.KeyValueTensorInitializer(tf.constant(CHARS), tf.range(1, len(CHARS)+1)), len(CHARS)+1
 )
 DIACRITICS_TABLE = tf.lookup.StaticHashTable(
-        tf.lookup.KeyValueTensorInitializer(tf.constant(DIACS), tf.range(1, len(DIACS)+1)), len(DIACS)+1
+        tf.lookup.KeyValueTensorInitializer(tf.constant(DIACS), tf.range(1, len(DIACS)+1)), 0
 )
 
 
@@ -67,21 +49,39 @@ def tf_encode(letters: tf.string, diacritics: tf.string):
 
 
 @tf.function
-def tf_pad_with_attention_mask(letters: tf.string, diacritics: tf.string):
+def tf_pad_with_attention_mask(letters: tf.int32, diacritics: tf.int32):
     letters = tf.pad(letters, [[0, SEQUENCE_LENGTH]], constant_values=0)[:SEQUENCE_LENGTH]
     diacritics = tf.pad(diacritics, [[0, SEQUENCE_LENGTH]], constant_values=0)[:SEQUENCE_LENGTH]
-    return (letters, letters > 0), diacritics
+    return (letters, tf.cast(letters > 0, tf.int32)), diacritics
 
 
-class XLNetDiacritizer(TFXLNetModel):
+@tf.function
+def tf_data_processing(text: tf.string):
+    text = tf_normalize_entities(text)
+    letters, diacritics = tf_separate_diacritics(text)
+    encoded_letters, encoded_diacritics = tf_encode(letters, diacritics)
+    return tf_pad_with_attention_mask(encoded_letters, encoded_diacritics)
+
+
+@tf.function
+def no_padding_loss(y_true, y_pred):
+    return tf.keras.metrics.sparse_categorical_crossentropy(y_true[y_true > 0], y_pred[y_true > 0])
+
+
+@tf.function
+def no_padding_accuracy(y_true, y_pred):
+    return tf.keras.metrics.sparse_categorical_accuracy(y_true[y_true > 0], y_pred[y_true > 0])
+
+
+class XLNetDiacritizationModel(TFXLNetModel):
 
     def __init__(self, config, *inputs, **kwargs):
-        super(XLNetDiacritizer, self).__init__(config, *inputs, **kwargs)
-        self.classifier = tf.keras.layers.TimeDistributed(tf.keras.layers.Dense(len(DIACS) + 1, activation='softmax'),
+        super(XLNetDiacritizationModel, self).__init__(config, *inputs, **kwargs)
+        self.classifier = tf.keras.layers.TimeDistributed(tf.keras.layers.Dense(len(DIACS)+1, activation='softmax'),
                                                           input_shape=(SEQUENCE_LENGTH, self.config.d_model))
 
     def call(self, inputs, **kwargs):
-        return self.classifier(super(XLNetDiacritizer, self).call(inputs, **kwargs)[0])
+        return self.classifier(super(XLNetDiacritizationModel, self).call(inputs, **kwargs)[0])
 
 
 def download_data(data_dir, download_url):
@@ -93,21 +93,22 @@ def download_data(data_dir, download_url):
                             cache_subdir=str(data_dir.absolute()), extract=True)
 
 
-def train(data_dir, params_dir, epochs):
+def train(data_dir, params_dir, epochs, batch_size):
     assert isinstance(data_dir, Path)
     assert isinstance(params_dir, Path)
     assert isinstance(epochs, int)
+    assert isinstance(batch_size, int)
     train_file_paths = [str(data_dir.joinpath(p)) for p in data_dir.glob('*train*.txt')]
     val_file_paths = [str(data_dir.joinpath(p)) for p in data_dir.glob('*val*.txt')]
-    train_dataset = tf.data.TextLineDataset(train_file_paths).map(tf_normalize_entities).map(tf_separate_diacritics).map(tf_encode)
-    val_dataset = tf.data.TextLineDataset(val_file_paths).map(tf_normalize_entities).map(tf_separate_diacritics).map(tf_encode)
+    train_dataset = tf.data.TextLineDataset(train_file_paths).repeat()\
+        .map(tf_data_processing,tf.data.experimental.AUTOTUNE).batch(batch_size, True).prefetch(1)
+    val_dataset = tf.data.TextLineDataset(val_file_paths).repeat()\
+        .map(tf_data_processing, tf.data.experimental.AUTOTUNE).batch(batch_size, True).prefetch(1)
     config = XLNetConfig.from_pretrained('xlnet-base-cased', cache_dir=str(params_dir.absolute()),
-                                         vocab_size=len(CHARS))
-    model = XLNetDiacritizer(config)
-    print(model)
-    first = lambda x, y: x
-    example_inputs = val_dataset.skip(5).take(3).map(tf_pad_with_attention_mask).map(first).batch(3)
-    # print(next(iter(example_inputs)))
-    outputs = model.predict(example_inputs)
-    print(outputs)
-    print(outputs.shape)
+                                         vocab_size=len(CHARS)+1)
+    xlnet = XLNetDiacritizationModel(config)
+    xlnet.compile(tf.keras.optimizers.RMSprop(), no_padding_loss, [no_padding_accuracy])
+    train_steps = tf.data.TextLineDataset(train_file_paths).batch(batch_size).take(100).\
+        reduce(0, lambda old, new: old + 1).numpy()
+    xlnet.fit(train_dataset.take(100).repeat(), steps_per_epoch=train_steps, epochs=epochs,
+              validation_data=val_dataset.take(100))
