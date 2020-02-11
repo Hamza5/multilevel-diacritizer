@@ -24,7 +24,7 @@ class ProcessingFunctionsTestCase(unittest.TestCase):
     def test_extract_diacritics(self):
         self.assertEqual(
             extract_diacritics('الدَّعْوَى: اسم ما يُدَّعَى.'),
-            ['', '', ('ّ', 'َ'), 'ْ', 'َ', '', '', '', '', '', '', '', '', '', '', 'ُ', ('ّ', 'َ'), 'َ', '', '']
+            ['', '', 'َّ', 'ْ', 'َ', '', '', '', '', '', '', '', '', '', '', 'ُ', 'َّ', 'َ', '', '']
         )
         random_text_without_diacritics = ''.join(choices(self.arabic_letters_and_space, k=1000))
         self.assertEqual(len(extract_diacritics(random_text_without_diacritics)), len(random_text_without_diacritics))
@@ -33,12 +33,12 @@ class ProcessingFunctionsTestCase(unittest.TestCase):
         self.assertEqual(
             merge_diacritics(
                 'الدعوى: اسم ما يدعى.',
-                ['', '', ('ّ', 'َ'), 'ْ', 'َ', '', '', '', '', '', '', '', '', '', '', 'ُ', ('ّ', 'َ'), 'َ', '', '']
+                ['', '', 'َّ', 'ْ', 'َ', '', '', '', '', '', '', '', '', '', '', 'ُ', 'َّ', 'َ', '', '']
             ), 'الدَّعْوَى: اسم ما يُدَّعَى.'
         )
 
     def test_merge_extract_clear_diacritics(self):
-        random_diacritics = choices(list(DIACRITICS) + [''] + [('ّ', x) for x in DIACRITICS.difference({'ّ'})],
+        random_diacritics = choices(list(DIACRITICS) + [''] + ['ّ'+x for x in DIACRITICS.difference({'ّ'})],
                                     k=len(self.random_arabic_text))
         random_diacritized_text = merge_diacritics(self.random_arabic_text, random_diacritics)
         self.assertEqual(extract_diacritics(random_diacritized_text), random_diacritics)
