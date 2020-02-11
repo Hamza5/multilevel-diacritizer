@@ -93,22 +93,38 @@ def download_data(data_dir, download_url):
                             cache_subdir=str(data_dir.absolute()), extract=True)
 
 
-def train(data_dir, params_dir, epochs, batch_size):
+def train(data_dir, params_dir, epochs, batch_size, early_stop):
     assert isinstance(data_dir, Path)
     assert isinstance(params_dir, Path)
     assert isinstance(epochs, int)
     assert isinstance(batch_size, int)
+    assert isinstance(early_stop, int)
     train_file_paths = [str(data_dir.joinpath(p)) for p in data_dir.glob('*train*.txt')]
     val_file_paths = [str(data_dir.joinpath(p)) for p in data_dir.glob('*val*.txt')]
     train_dataset = tf.data.TextLineDataset(train_file_paths).repeat()\
-        .map(tf_data_processing,tf.data.experimental.AUTOTUNE).batch(batch_size, True).prefetch(1)
+        .map(tf_data_processing, tf.data.experimental.AUTOTUNE).batch(batch_size, True).prefetch(1)
     val_dataset = tf.data.TextLineDataset(val_file_paths).repeat()\
         .map(tf_data_processing, tf.data.experimental.AUTOTUNE).batch(batch_size, True).prefetch(1)
     config = XLNetConfig.from_pretrained('xlnet-base-cased', cache_dir=str(params_dir.absolute()),
                                          vocab_size=len(CHARS)+1)
     xlnet = XLNetDiacritizationModel(config)
     xlnet.compile(tf.keras.optimizers.RMSprop(), no_padding_loss, [no_padding_accuracy])
-    train_steps = tf.data.TextLineDataset(train_file_paths).batch(batch_size).take(100).\
-        reduce(0, lambda old, new: old + 1).numpy()
-    xlnet.fit(train_dataset.take(100).repeat(), steps_per_epoch=train_steps, epochs=epochs,
-              validation_data=val_dataset.take(100))
+    train_steps = tf.data.TextLineDataset(train_file_paths).batch(batch_size)\
+        .reduce(0, lambda old, new: old + 1).numpy()
+    val_steps = tf.data.TextLineDataset(val_file_paths).batch(batch_size)\
+        .reduce(0, lambda old, new: old + 1).numpy()
+    last_iteration = 0
+    weight_files = sorted(params_dir.glob(xlnet.name+'-*.h5'))
+    if len(weight_files) > 0:
+        last_weights_file = str(params_dir.joinpath(weight_files[-1]).absolute())
+        last_iteration = int(last_weights_file.split('-')[-1].split('.')[0])
+        xlnet.load_weights(last_weights_file)
+    xlnet.fit(train_dataset, steps_per_epoch=train_steps, epochs=epochs, validation_data=val_dataset,
+              validation_steps=val_steps, initial_epoch=last_iteration,
+              callbacks=[tf.keras.callbacks.EarlyStopping(patience=early_stop, verbose=1, restore_best_weights=True),
+                         tf.keras.callbacks.ModelCheckpoint(
+                             str(params_dir.joinpath(xlnet.name+'-{epoch:04d}.h5').absolute()), save_best_only=True,
+                             save_weights_only=True
+                         ),
+                         tf.keras.callbacks.TerminateOnNaN(), tf.keras.callbacks.TensorBoard(str(data_dir.absolute()))]
+              )

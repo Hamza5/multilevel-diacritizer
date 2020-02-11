@@ -7,6 +7,7 @@ DATA_DIR = Path('data/')
 PARAMS_DIR = Path('params/')
 BATCH_SIZE = 32
 TRAIN_STEPS = 10000
+EARLY_STOPPING_STEPS = 5
 
 if __name__ == '__main__':
     main_parser = ArgumentParser(description='Command-line text diacritics restoration tool.')
@@ -25,10 +26,13 @@ if __name__ == '__main__':
                               help='Maximum number of steps before stopping the training.')
     train_parser.add_argument('--batch-size', '-b', type=int, default=BATCH_SIZE,
                               help='Maximum number of elements in a single batch.')
+    train_parser.add_argument('--early-stopping-steps', '-e', type=int, default=EARLY_STOPPING_STEPS,
+                              help='Number of training steps to wait before stopping the training if there is no'
+                                   'improvement.')
     args = main_parser.parse_args()
     if args.subcommand == 'download-data':
         download_data(args.tmp_dir, args.url)
         print('Generated.')
     elif args.subcommand == 'train':
-        train(args.data_dir, args.params_dir, args.train_steps, args.batch_size)
+        train(args.data_dir, args.params_dir, args.train_steps, args.batch_size, args.early_stopping_steps)
         print('Trained.')
