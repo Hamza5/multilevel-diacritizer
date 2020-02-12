@@ -2,8 +2,10 @@ import unittest
 from random import randint, choices, choice
 
 import numpy as np
+import tensorflow as tf
 
 from processing import *
+from tf_functions import tf_separate_diacritics
 
 
 class ProcessingFunctionsTestCase(unittest.TestCase):
@@ -111,6 +113,23 @@ class ProcessingFunctionsTestCase(unittest.TestCase):
         converted_sentence = convert_non_arabic(random_sentence)
         self.assertNotEqual(random_sentence, converted_sentence)
         self.assertEqual(converted_sentence.count(FOREIGN) + converted_sentence.count(NUMBER), non_arabic_words_count)
+
+
+class TFFunctionsTestCase(unittest.TestCase):
+
+    def setUp(self):
+        self.arabic_letters_and_space = [chr(x) for x in list(range(0x0641, 0x064B)) + list(range(0x0621, 0x63B)) +
+                                         [ord(' ')]]
+        high_weight_for_space = np.ones(len(self.arabic_letters_and_space))
+        high_weight_for_space[-1] *= 10
+        high_weight_for_space /= np.sum(high_weight_for_space)
+        self.random_arabic_text = ''.join(choices(self.arabic_letters_and_space, k=1000, weights=high_weight_for_space))
+
+    def test_separate_diacritics(self):
+        ds = 'أوَائِلَ الأشياء: الصُّبْحُ أوَّلُ النَّهارِ، الْوَسْمِيُّ أوَّلُ المَطرِ.'
+        letters, diacritics = tf_separate_diacritics(tf.constant(ds))
+        self.assertEqual(tf.strings.reduce_join(letters, 0), tf.constant(clear_diacritics(ds)))
+        self.assertEqual(tf_separate_diacritics(tf.constant('Python 3.7'))[0].numpy().sum().decode(), 'Python 3.7')
 
 
 if __name__ == '__main__':
