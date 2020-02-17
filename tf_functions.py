@@ -34,9 +34,9 @@ def tf_normalize_entities(text: tf.string):
 
 
 CHARS = sorted(ARABIC_LETTERS.union({NUMBER, ' '}))
-DIACS = sorted(DIACRITICS - {'ّ'}) + sorted('ّ'+x for x in (DIACRITICS - {'ّ'}))
+DIACS = sorted(DIACRITICS.difference({'ّ', ''})) + sorted('ّ'+x for x in (DIACRITICS.difference({'ّ'})))
 LETTERS_TABLE = tf.lookup.StaticHashTable(
-        tf.lookup.KeyValueTensorInitializer(tf.constant(CHARS), tf.range(1, len(CHARS)+1)), len(CHARS)+1
+        tf.lookup.KeyValueTensorInitializer(tf.constant(CHARS), tf.range(1, len(CHARS)+1)), 0
 )
 DIACRITICS_TABLE = tf.lookup.StaticHashTable(
         tf.lookup.KeyValueTensorInitializer(tf.constant(DIACS), tf.range(1, len(DIACS)+1)), 0
@@ -120,7 +120,7 @@ def train(data_dir, params_dir, epochs, batch_size, early_stop):
         last_iteration = int(last_weights_file.split('-')[-1].split('.')[0])
         xlnet.load_weights(last_weights_file)
     xlnet.fit(train_dataset, steps_per_epoch=train_steps, epochs=epochs, validation_data=val_dataset,
-              validation_steps=val_steps, initial_epoch=last_iteration,
+              validation_steps=val_steps, initial_epoch=last_iteration,  # TODO: Think about the classes and their weights.
               callbacks=[tf.keras.callbacks.EarlyStopping(patience=early_stop, verbose=1, restore_best_weights=True),
                          tf.keras.callbacks.ModelCheckpoint(
                              str(params_dir.joinpath(xlnet.name+'-{epoch:04d}.h5').absolute()), save_best_only=True,

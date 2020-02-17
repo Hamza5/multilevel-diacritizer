@@ -17,7 +17,7 @@ if __name__ == '__main__':
                              help='Directory used for downloading and extracting the dataset.')
     data_parser.add_argument('--url', '-u', help='URL of the Tashkeela-processed dataset.',
                              default='https://sourceforge.net/projects/tashkeela-processed/files/latest/download')
-    train_parser = subparsers.add_parser('train', help='Train the model on a generated dataset.')
+    train_parser = subparsers.add_parser('train', help='Train the model on a dataset.')
     train_parser.add_argument('--data-dir', '-d', type=Path, default=DATA_DIR,
                               help='Directory which contains vocabulary and data files.')
     train_parser.add_argument('--params-dir', '-p', type=Path, default=PARAMS_DIR,
