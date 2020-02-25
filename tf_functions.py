@@ -34,7 +34,7 @@ def tf_normalize_entities(text: tf.string):
 
 
 CHARS = sorted(ARABIC_LETTERS.union({NUMBER, ' '}))
-DIACS = sorted(DIACRITICS.difference({'ّ', ''})) + sorted('ّ'+x for x in (DIACRITICS.difference({'ّ'})))
+DIACS = sorted(DIACRITICS.difference({'ّ'}).union({''})) + sorted('ّ'+x for x in (DIACRITICS.difference({'ّ'})))
 LETTERS_TABLE = tf.lookup.StaticHashTable(
         tf.lookup.KeyValueTensorInitializer(tf.constant(CHARS), tf.range(1, len(CHARS)+1)), 0
 )
