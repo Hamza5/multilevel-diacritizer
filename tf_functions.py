@@ -1,12 +1,16 @@
 from pathlib import Path
 
 import tensorflow as tf
+import numpy as np
+# tf.config.experimental_run_functions_eagerly(True)
 from transformers import TFXLNetModel, XLNetConfig
 
 from processing import DIACRITICS, NUMBER, NUMBER_PATTERN, ARABIC_LETTERS
 
 DATASET_FILE_NAME = 'Tashkeela-processed.zip'
 SEQUENCE_LENGTH = 100  # TODO: Need to change this to a more accurate value.
+PRETRAINED_MODEL_NAME = 'xlnet-base-cased'
+OPTIMIZER = tf.keras.optimizers.RMSprop()
 
 
 @tf.function
@@ -93,6 +97,22 @@ def download_data(data_dir, download_url):
                             cache_subdir=str(data_dir.absolute()), extract=True)
 
 
+def _get_xlnet(params_dir):
+    assert isinstance(params_dir, Path)
+    config = XLNetConfig.from_pretrained(PRETRAINED_MODEL_NAME, cache_dir=str(params_dir.absolute()),
+                                         vocab_size=len(CHARS) + 1)
+    xlnet = XLNetDiacritizationModel(config)
+    xlnet.compile(OPTIMIZER, no_padding_loss, [no_padding_accuracy])
+    xlnet((np.zeros((1, SEQUENCE_LENGTH), np.int), np.zeros((1, SEQUENCE_LENGTH), np.int)))
+    last_iteration = 0
+    weight_files = sorted([x.name for x in params_dir.glob(xlnet.name + '-*.h5')])
+    if len(weight_files) > 0:
+        last_weights_file = str(params_dir.joinpath(weight_files[-1]).absolute())
+        last_iteration = int(last_weights_file.split('-')[-1].split('.')[0])
+        xlnet.load_weights(last_weights_file)
+    return xlnet, last_iteration
+
+
 def train(data_dir, params_dir, epochs, batch_size, early_stop):
     assert isinstance(data_dir, Path)
     assert isinstance(params_dir, Path)
@@ -105,26 +125,29 @@ def train(data_dir, params_dir, epochs, batch_size, early_stop):
         .map(tf_data_processing, tf.data.experimental.AUTOTUNE).batch(batch_size, True).prefetch(1)
     val_dataset = tf.data.TextLineDataset(val_file_paths).repeat()\
         .map(tf_data_processing, tf.data.experimental.AUTOTUNE).batch(batch_size, True).prefetch(1)
-    config = XLNetConfig.from_pretrained('xlnet-base-cased', cache_dir=str(params_dir.absolute()),
-                                         vocab_size=len(CHARS)+1)
-    xlnet = XLNetDiacritizationModel(config)
-    xlnet.compile(tf.keras.optimizers.RMSprop(), no_padding_loss, [no_padding_accuracy])
-    train_steps = tf.data.TextLineDataset(train_file_paths).batch(batch_size)\
+    train_steps = tf.data.TextLineDataset(train_file_paths).batch(batch_size) \
         .reduce(0, lambda old, new: old + 1).numpy()
-    val_steps = tf.data.TextLineDataset(val_file_paths).batch(batch_size)\
+    val_steps = tf.data.TextLineDataset(val_file_paths).batch(batch_size) \
         .reduce(0, lambda old, new: old + 1).numpy()
-    last_iteration = 0
-    weight_files = sorted(params_dir.glob(xlnet.name+'-*.h5'))
-    if len(weight_files) > 0:
-        last_weights_file = str(params_dir.joinpath(weight_files[-1]).absolute())
-        last_iteration = int(last_weights_file.split('-')[-1].split('.')[0])
-        xlnet.load_weights(last_weights_file)
+    xlnet, last_iteration = _get_xlnet(params_dir)
     xlnet.fit(train_dataset, steps_per_epoch=train_steps, epochs=epochs, validation_data=val_dataset,
               validation_steps=val_steps, initial_epoch=last_iteration,  # TODO: Think about the classes and their weights.
               callbacks=[tf.keras.callbacks.EarlyStopping(patience=early_stop, verbose=1, restore_best_weights=True),
                          tf.keras.callbacks.ModelCheckpoint(
-                             str(params_dir.joinpath(xlnet.name+'-{epoch:04d}.h5').absolute()), save_best_only=True,
-                             save_weights_only=True
+                             str(params_dir.joinpath(xlnet.name+'-{epoch:03d}.h5').absolute()), save_best_only=True,
+                             save_weights_only=True,
                          ),
                          tf.keras.callbacks.TerminateOnNaN(), tf.keras.callbacks.TensorBoard(str(data_dir.absolute()))]
               )
+
+
+def test(data_dir, params_dir, batch_size):
+    assert isinstance(data_dir, Path)
+    assert isinstance(params_dir, Path)
+    test_file_paths = [str(data_dir.joinpath(p)) for p in data_dir.glob('*test*.txt')]
+    test_dataset = tf.data.TextLineDataset(test_file_paths).repeat()\
+        .map(tf_data_processing, tf.data.experimental.AUTOTUNE).batch(batch_size, True).prefetch(1)
+    test_steps = tf.data.TextLineDataset(test_file_paths).batch(batch_size)\
+        .reduce(0, lambda old, new: old + 1).numpy()
+    xlnet, last_iteration = _get_xlnet(params_dir)
+    print(xlnet.evaluate(test_dataset, steps=test_steps))

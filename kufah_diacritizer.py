@@ -1,7 +1,7 @@
 #!/usr/bin/python3
 from argparse import ArgumentParser
 from pathlib import Path
-from tf_functions import download_data, train
+from tf_functions import download_data, train, test
 
 DATA_DIR = Path('data/')
 PARAMS_DIR = Path('params/')
@@ -29,6 +29,13 @@ if __name__ == '__main__':
     train_parser.add_argument('--early-stopping-steps', '-e', type=int, default=EARLY_STOPPING_STEPS,
                               help='Number of training steps to wait before stopping the training if there is no'
                                    'improvement.')
+    test_parser = subparsers.add_parser('test', help='Test the model on a dataset.')
+    test_parser.add_argument('--data-dir', '-d', type=Path, default=DATA_DIR,
+                             help='Directory which contains vocabulary and data files.')
+    test_parser.add_argument('--params-dir', '-p', type=Path, default=PARAMS_DIR,
+                             help='Directory containing the model parameters.')
+    test_parser.add_argument('--batch-size', '-b', type=int, default=BATCH_SIZE,
+                             help='Maximum number of elements in a single batch.')
     args = main_parser.parse_args()
     if args.subcommand == 'download-data':
         download_data(args.tmp_dir, args.url)
@@ -36,3 +43,5 @@ if __name__ == '__main__':
     elif args.subcommand == 'train':
         train(args.data_dir, args.params_dir, args.train_steps, args.batch_size, args.early_stopping_steps)
         print('Trained.')
+    elif args.subcommand == 'test':
+        test(args.data_dir, args.params_dir, args.batch_size)
