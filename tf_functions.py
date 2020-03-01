@@ -38,7 +38,7 @@ def tf_normalize_entities(text: tf.string):
 
 
 CHARS = sorted(ARABIC_LETTERS.union({NUMBER, ' '}))
-DIACS = sorted(DIACRITICS.difference({'ّ'}).union({''})) + sorted('ّ'+x for x in (DIACRITICS.difference({'ّ'})))
+DIACS = sorted(DIACRITICS.difference({'ّ'}).union({''}).union('ّ'+x for x in DIACRITICS.difference({'ّ'})))
 LETTERS_TABLE = tf.lookup.StaticHashTable(
         tf.lookup.KeyValueTensorInitializer(tf.constant(CHARS), tf.range(1, len(CHARS)+1)), 0
 )
@@ -68,24 +68,21 @@ def tf_data_processing(text: tf.string):
 
 
 @tf.function
-def no_padding_loss(y_true, y_pred):
-    return tf.keras.metrics.sparse_categorical_crossentropy(y_true[y_true > 0], y_pred[y_true > 0])
-
-
-@tf.function
 def no_padding_accuracy(y_true, y_pred):
-    return tf.keras.metrics.sparse_categorical_accuracy(y_true[y_true > 0], y_pred[y_true > 0])
+    return tf.reduce_mean(tf.cast(tf.equal(y_true, tf.cast(tf.argmax(y_pred, axis=-1), tf.float32))[tf.greater(y_true, 0)], tf.float32))
 
 
 class XLNetDiacritizationModel(TFXLNetModel):
 
     def __init__(self, config, *inputs, **kwargs):
         super(XLNetDiacritizationModel, self).__init__(config, *inputs, **kwargs)
-        self.classifier = tf.keras.layers.TimeDistributed(tf.keras.layers.Dense(len(DIACS)+1, activation='softmax'),
+        self.classifier = tf.keras.layers.TimeDistributed(tf.keras.layers.Dense(len(DIACS)+1),
                                                           input_shape=(SEQUENCE_LENGTH, self.config.d_model))
 
     def call(self, inputs, **kwargs):
-        return self.classifier(super(XLNetDiacritizationModel, self).call(inputs, **kwargs)[0])
+        return self.classifier(
+            tf.keras.activations.tanh(super(XLNetDiacritizationModel, self).call(inputs, **kwargs)[0])
+        )
 
 
 def download_data(data_dir, download_url):
@@ -102,7 +99,7 @@ def _get_xlnet(params_dir):
     config = XLNetConfig.from_pretrained(PRETRAINED_MODEL_NAME, cache_dir=str(params_dir.absolute()),
                                          vocab_size=len(CHARS) + 1)
     xlnet = XLNetDiacritizationModel(config)
-    xlnet.compile(OPTIMIZER, no_padding_loss, [no_padding_accuracy])
+    xlnet.compile(OPTIMIZER, tf.keras.losses.SparseCategoricalCrossentropy(True), [no_padding_accuracy])
     xlnet((np.zeros((1, SEQUENCE_LENGTH), np.int), np.zeros((1, SEQUENCE_LENGTH), np.int)))
     last_iteration = 0
     weight_files = sorted([x.name for x in params_dir.glob(xlnet.name + '-*.h5')])

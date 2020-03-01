@@ -7,7 +7,7 @@ DATA_DIR = Path('data/')
 PARAMS_DIR = Path('params/')
 BATCH_SIZE = 32
 TRAIN_STEPS = 10000
-EARLY_STOPPING_STEPS = 5
+EARLY_STOPPING_STEPS = 3
 
 if __name__ == '__main__':
     main_parser = ArgumentParser(description='Command-line text diacritics restoration tool.')
