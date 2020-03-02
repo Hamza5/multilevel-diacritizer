@@ -114,14 +114,6 @@ class ProcessingFunctionsTestCase(unittest.TestCase):
 
 class TFFunctionsTestCase(unittest.TestCase):
 
-    def setUp(self):
-        self.arabic_letters_and_space = [chr(x) for x in list(range(0x0641, 0x064B)) + list(range(0x0621, 0x63B)) +
-                                         [ord(' ')]]
-        high_weight_for_space = np.ones(len(self.arabic_letters_and_space))
-        high_weight_for_space[-1] *= 10
-        high_weight_for_space /= np.sum(high_weight_for_space)
-        self.random_arabic_text = ''.join(choices(self.arabic_letters_and_space, k=1000, weights=high_weight_for_space))
-
     def test_hash_tables(self):
         self.assertEqual(len(DIACS), 15)
         self.assertEqual(len(CHARS), 38)
@@ -139,6 +131,18 @@ class TFFunctionsTestCase(unittest.TestCase):
         letters, diacritics = tf_separate_diacritics(tf.constant(ds))
         self.assertEqual(tf.strings.reduce_join(letters, 0), tf.constant(clear_diacritics(ds)))
         self.assertEqual(tf_separate_diacritics(tf.constant('Python 3.7'))[0].numpy().sum().decode(), 'Python 3.7')
+
+    def test_merge_diacritics(self):
+        self.assertEqual(
+            tf_merge_diacritics(
+                tf.constant(list('الدعوى: اسم ما يدعى.')),
+                tf.constant(['', '', 'َّ', 'ْ', 'َ', '', '', '', '', '', '', '', '', '', '', 'ُ', 'َّ', 'َ', '', ''])
+            ), tf.constant('الدَّعْوَى: اسم ما يُدَّعَى.')
+        )
+        self.assertEqual(
+            tf_merge_diacritics(*tf_separate_diacritics(tf.constant('الدَّعْوَى: اسم ما يُدَّعَى.'))),
+            tf.constant('الدَّعْوَى: اسم ما يُدَّعَى.')
+        )
 
 
 if __name__ == '__main__':
