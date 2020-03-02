@@ -1,11 +1,8 @@
 import unittest
 from random import randint, choices, choice
 
-import numpy as np
-import tensorflow as tf
-
 from processing import *
-from tf_functions import tf_separate_diacritics
+from tf_functions import *
 
 
 class ProcessingFunctionsTestCase(unittest.TestCase):
@@ -124,6 +121,18 @@ class TFFunctionsTestCase(unittest.TestCase):
         high_weight_for_space[-1] *= 10
         high_weight_for_space /= np.sum(high_weight_for_space)
         self.random_arabic_text = ''.join(choices(self.arabic_letters_and_space, k=1000, weights=high_weight_for_space))
+
+    def test_hash_tables(self):
+        self.assertEqual(len(DIACS), 15)
+        self.assertEqual(len(CHARS), 38)
+        for char in CHARS:
+            self.assertIsInstance(char, str)
+            self.assertEqual(len(char), 1)
+        for diac in DIACS:
+            self.assertIsInstance(diac, str)
+            self.assertLessEqual(len(diac), 2)
+        self.assertTrue(tf.reduce_all(tf.not_equal(LETTERS_TABLE.lookup(tf.constant(CHARS)), 0)).numpy())
+        self.assertTrue(tf.reduce_all(tf.not_equal(DIACRITICS_TABLE.lookup(tf.constant(DIACS)), 0)).numpy())
 
     def test_separate_diacritics(self):
         ds = 'أوَائِلَ الأشياء: الصُّبْحُ أوَّلُ النَّهارِ، الْوَسْمِيُّ أوَّلُ المَطرِ.'
