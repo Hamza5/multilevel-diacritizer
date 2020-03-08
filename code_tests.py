@@ -114,6 +114,17 @@ class ProcessingFunctionsTestCase(unittest.TestCase):
 
 class TFFunctionsTestCase(unittest.TestCase):
 
+    def test_max_len_pairs(self):
+        x = tf.constant([
+            ['', ''],
+            ['x', ''],
+            ['y', 'z'],
+            ['c', 'yz'],
+            ['cd', 'y'],
+            ['', 'c']
+        ])
+        self.assertTrue(tf.reduce_all(tf.equal(tf_max_length_pairs(x), tf.constant(['c', 'yz']))))
+
     def test_hash_tables(self):
         self.assertEqual(len(DIACS), 15)
         self.assertEqual(len(CHARS), 38)
@@ -125,6 +136,21 @@ class TFFunctionsTestCase(unittest.TestCase):
             self.assertLessEqual(len(diac), 2)
         self.assertTrue(tf.reduce_all(tf.not_equal(LETTERS_TABLE.lookup(tf.constant(CHARS)), 0)).numpy())
         self.assertTrue(tf.reduce_all(tf.not_equal(DIACRITICS_TABLE.lookup(tf.constant(DIACS)), 0)).numpy())
+
+    def test_separate_affixes(self):
+        words_partitions = {
+            'بالوضع': ['بال', 'وضع', ''],
+            'الجمع': ['ال', 'جمع', ''],
+            'مضمون': ['', 'مضم', 'ون'],
+            'الاستدلالات': ['ال', 'استدلالا', 'ت'],
+            'ف': ['', 'ف', ''],
+            'يكملان': ['', 'يكمل', 'ان']
+        }
+        with tf.device('/cpu:0'):  # Because of tf.map_fn bug.
+            for w, p in words_partitions.items():
+                self.assertTrue(
+                    tf.reduce_all(tf.equal(tf_separate_affixes(tf.constant(w)), tf.constant(p)))
+                )
 
     def test_separate_diacritics(self):
         ds = 'أوَائِلَ الأشياء: الصُّبْحُ أوَّلُ النَّهارِ، الْوَسْمِيُّ أوَّلُ المَطرِ.'

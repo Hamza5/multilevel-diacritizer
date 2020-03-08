@@ -5,12 +5,54 @@ import numpy as np
 # tf.config.experimental_run_functions_eagerly(True)
 from transformers import TFXLNetModel, XLNetConfig
 
-from processing import DIACRITICS, NUMBER, NUMBER_PATTERN, ARABIC_LETTERS
+from processing import DIACRITICS, NUMBER, NUMBER_PATTERN, ARABIC_LETTERS, SEPARATED_SUFFIXES, SEPARATED_PREFIXES,\
+    MIN_STEM_LEN
 
 DATASET_FILE_NAME = 'Tashkeela-processed.zip'
 SEQUENCE_LENGTH = 100  # TODO: Need to change this to a more accurate value.
 PRETRAINED_MODEL_NAME = 'xlnet-base-cased'
 OPTIMIZER = tf.keras.optimizers.RMSprop()
+TF_CHAR_ENCODING = 'UTF8_CHAR'
+
+
+@tf.function
+def tf_max_length_pairs(pairs: tf.Tensor):
+    lengths = tf.strings.length(tf.strings.reduce_join(pairs, -1), TF_CHAR_ENCODING)
+    return pairs[tf.argmax(lengths)]
+
+
+@tf.function
+def tf_separate_affixes(u_word: tf.string):
+
+    def regex_match(x):
+        return tf.strings.regex_full_match(x[0], x[1])
+
+    prefixes = tf.constant(sorted(SEPARATED_PREFIXES.union([''])))
+    suffixes = tf.constant(sorted(SEPARATED_SUFFIXES.union([''])))
+    prefixes_patterns = tf.strings.join([tf.constant('^'), prefixes, tf.constant('.+')])
+    suffixes_patterns = tf.strings.join([tf.constant('.+'), suffixes, tf.constant('$')])
+    possible_prefixes = tf.map_fn(regex_match,
+                                  tf.stack([tf.broadcast_to(u_word, prefixes_patterns.shape), prefixes_patterns], -1),
+                                  tf.bool)
+    possible_suffixes = tf.map_fn(regex_match,
+                                  tf.stack([tf.broadcast_to(u_word, suffixes_patterns.shape), suffixes_patterns], -1),
+                                  tf.bool)
+    accepted_affixes = tf.TensorArray(tf.string, size=1, dynamic_size=True, clear_after_read=True, element_shape=(2,))
+    accepted_affixes.write(accepted_affixes.size(), tf.constant(['', '']))  # Words with length less than the threshold.
+    for i in tf.where(possible_prefixes)[:, 0]:
+        for j in tf.where(possible_suffixes)[:, 0]:
+            stem_len = tf.strings.length(u_word, TF_CHAR_ENCODING) - (tf.strings.length(prefixes[i], TF_CHAR_ENCODING) +
+                                                                      tf.strings.length(suffixes[j], TF_CHAR_ENCODING))
+            if stem_len >= MIN_STEM_LEN:
+                accepted_affixes = accepted_affixes.write(accepted_affixes.size(),
+                                                          tf.stack((prefixes[i], suffixes[j]), -1))
+    accepted_affixes = accepted_affixes.stack()
+    prefix_suffix = tf_max_length_pairs(accepted_affixes)
+    p_len = tf.strings.length(prefix_suffix[0], TF_CHAR_ENCODING)
+    s_len = tf.strings.length(prefix_suffix[1], TF_CHAR_ENCODING)
+    w_len = tf.strings.length(u_word, TF_CHAR_ENCODING)
+    return tf.stack([prefix_suffix[0], tf.strings.substr(u_word, p_len, w_len - (p_len + s_len), TF_CHAR_ENCODING),
+                     prefix_suffix[1]])
 
 
 @tf.function
