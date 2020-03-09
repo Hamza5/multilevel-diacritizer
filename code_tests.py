@@ -152,6 +152,35 @@ class TFFunctionsTestCase(unittest.TestCase):
                     tf.reduce_all(tf.equal(tf_separate_affixes(tf.constant(w)), tf.constant(p)))
                 )
 
+    def test_word_to_pattern(self):
+        words_patterns = {
+            'المعْنَى': 'الححْحَا',
+            'دلالة': 'ححاحة',
+            'بالوضع': 'بالوحح',
+            'دلَّ': 'ححَّ',
+            'نساء': 'نحاء',
+            'صفات': 'ححات',
+            'جَعَلَهُ': 'حَحَحَهُ',
+            'وسُؤْرُ': 'وحُءْحُ',
+            'ل': 'ح',
+            'مضمون': 'حححون',
+            'ورأيتهما': 'وحءيتهما',
+            'فيضحكن': 'فيححكن',
+            'تلعبان': 'تحححان',
+            'استجمع': 'استححح',
+            'أكل': 'أحح',
+            'Xor': 'Xor',
+            'h345': 'h345',
+            'بصفين': 'بححين',
+            'فسَماءٌ': 'فحَحاءٌ',
+            'مسميات': 'حححيات',
+        }
+        with tf.device('/cpu:0'):  # Because of tf.map_fn bug.
+            for w, p in words_patterns.items():
+                self.assertTrue(
+                    tf.reduce_all(tf.equal(tf_word_to_pattern(tf.constant(w)), tf.constant(p)))
+                )
+
     def test_separate_diacritics(self):
         ds = 'أوَائِلَ الأشياء: الصُّبْحُ أوَّلُ النَّهارِ، الْوَسْمِيُّ أوَّلُ المَطرِ.'
         letters, diacritics = tf_separate_diacritics(tf.constant(ds))

@@ -2,11 +2,11 @@ from pathlib import Path
 
 import tensorflow as tf
 import numpy as np
-# tf.config.experimental_run_functions_eagerly(True)
+tf.config.experimental_run_functions_eagerly(True)
 from transformers import TFXLNetModel, XLNetConfig
 
 from processing import DIACRITICS, NUMBER, NUMBER_PATTERN, ARABIC_LETTERS, SEPARATED_SUFFIXES, SEPARATED_PREFIXES,\
-    MIN_STEM_LEN
+    MIN_STEM_LEN, HAMZAT_PATTERN, ORDINARY_ARABIC_LETTERS_PATTERN
 
 DATASET_FILE_NAME = 'Tashkeela-processed.zip'
 SEQUENCE_LENGTH = 100  # TODO: Need to change this to a more accurate value.
@@ -53,6 +53,18 @@ def tf_separate_affixes(u_word: tf.string):
     w_len = tf.strings.length(u_word, TF_CHAR_ENCODING)
     return tf.stack([prefix_suffix[0], tf.strings.substr(u_word, p_len, w_len - (p_len + s_len), TF_CHAR_ENCODING),
                      prefix_suffix[1]])
+
+
+@tf.function
+def tf_word_to_pattern(word: tf.string):
+    letters, diacritics = tf_separate_diacritics(word)
+    u_word = tf.strings.reduce_join(letters)
+    pre_st_suf = tf_separate_affixes(u_word)
+    prefix, stem, suffix = pre_st_suf[0], pre_st_suf[1], pre_st_suf[2]
+    stem = tf.strings.regex_replace(stem, 'ى', 'ا')
+    stem = tf.strings.regex_replace(stem, HAMZAT_PATTERN.pattern, 'ء')
+    stem = tf.strings.regex_replace(stem, ORDINARY_ARABIC_LETTERS_PATTERN.pattern, 'ح')
+    return tf_merge_diacritics(tf.strings.unicode_split(tf.strings.join([prefix, stem, suffix]), 'UTF-8'), diacritics)
 
 
 @tf.function
