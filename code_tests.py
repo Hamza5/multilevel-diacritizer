@@ -146,11 +146,10 @@ class TFFunctionsTestCase(unittest.TestCase):
             'ف': ['', 'ف', ''],
             'يكملان': ['', 'يكمل', 'ان']
         }
-        with tf.device('/cpu:0'):  # Because of tf.map_fn bug.
-            for w, p in words_partitions.items():
-                self.assertTrue(
-                    tf.reduce_all(tf.equal(tf_separate_affixes(tf.constant(w)), tf.constant(p)))
-                )
+        for w, p in words_partitions.items():
+            self.assertTrue(
+                tf.reduce_all(tf.equal(tf_separate_affixes(tf.constant(w)), tf.constant(p)))
+            )
 
     def test_word_to_pattern(self):
         words_patterns = {
@@ -175,11 +174,10 @@ class TFFunctionsTestCase(unittest.TestCase):
             'فسَماءٌ': 'فحَحاءٌ',
             'مسميات': 'حححيات',
         }
-        with tf.device('/cpu:0'):  # Because of tf.map_fn bug.
-            for w, p in words_patterns.items():
-                self.assertTrue(
-                    tf.reduce_all(tf.equal(tf_word_to_pattern(tf.constant(w)), tf.constant(p)))
-                )
+        for w, p in words_patterns.items():
+            self.assertTrue(
+                tf.reduce_all(tf.equal(tf_word_to_pattern(tf.constant(w)), tf.constant(p)))
+            )
 
     def test_separate_diacritics(self):
         ds = 'أوَائِلَ الأشياء: الصُّبْحُ أوَّلُ النَّهارِ، الْوَسْمِيُّ أوَّلُ المَطرِ.'
@@ -195,8 +193,14 @@ class TFFunctionsTestCase(unittest.TestCase):
             ), tf.constant('الدَّعْوَى: اسم ما يُدَّعَى.')
         )
         self.assertEqual(
-            tf_merge_diacritics(*tf_separate_diacritics(tf.constant('الدَّعْوَى: اسم ما يُدَّعَى.'))),
-            tf.constant('الدَّعْوَى: اسم ما يُدَّعَى.')
+            tf_merge_diacritics(*tf_separate_diacritics(tf.constant('5- الدَّعْوَى: اسم ما يُدَّعَى.'))),
+            tf.constant('5- الدَّعْوَى: اسم ما يُدَّعَى.')
+        )
+
+    def test_convert_to_pattern(self):
+        self.assertEqual(
+            tf_convert_to_pattern(tf.constant('الدَّعْوَى: اسم ما يُدَّعَى.')),
+            tf.constant('الحَّحْوَا: احح حا يُحَّحَا.')
         )
 
 

@@ -68,6 +68,12 @@ def tf_word_to_pattern(word: tf.string):
 
 
 @tf.function
+def tf_convert_to_pattern(d_text: tf.string):
+    parts = tf.strings.split(tf.strings.regex_replace(d_text, r'(\w+|\p{P}|\s)', r'\1&'), '&')
+    return tf.strings.reduce_join(tf.map_fn(tf_word_to_pattern, parts))
+
+
+@tf.function
 def tf_separate_diacritics(d_text: tf.string):
     letter_diacritic = tf.strings.split(
         tf.strings.regex_replace(d_text, r'(.[' + ''.join(DIACRITICS) + ']*)', r'\1&'), '&'
