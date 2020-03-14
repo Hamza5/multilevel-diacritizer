@@ -1,4 +1,4 @@
-#!/usr/bin/python3
+#!/usr/bin/env python3
 from argparse import ArgumentParser
 from pathlib import Path
 from tf_functions import download_data, train, test
