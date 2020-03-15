@@ -38,7 +38,7 @@ if __name__ == '__main__':
                              help='Maximum number of elements in a single batch.')
     args = main_parser.parse_args()
     if args.subcommand == 'download-data':
-        download_data(args.tmp_dir, args.url)
+        download_data(args.data_dir, args.url)
         print('Generated.')
     elif args.subcommand == 'train':
         train(args.data_dir, args.params_dir, args.train_steps, args.batch_size, args.early_stopping_steps)
