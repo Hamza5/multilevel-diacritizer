@@ -1,9 +1,9 @@
 from pathlib import Path
 
 import tensorflow as tf
-import numpy as np
-tf.config.experimental_run_functions_eagerly(True)
-from transformers import TFXLNetModel, XLNetConfig
+from tensorflow.keras import Sequential
+from tensorflow.keras.layers import Embedding, LSTM, Dense, TimeDistributed, Bidirectional
+# tf.config.experimental_run_functions_eagerly(True)
 
 from processing import DIACRITICS, NUMBER, NUMBER_PATTERN, ARABIC_LETTERS, SEPARATED_SUFFIXES, SEPARATED_PREFIXES,\
     MIN_STEM_LEN, HAMZAT_PATTERN, ORDINARY_ARABIC_LETTERS_PATTERN
@@ -113,10 +113,10 @@ def tf_encode(letters: tf.string, diacritics: tf.string):
 
 
 @tf.function
-def tf_pad_with_attention_mask(letters: tf.int32, diacritics: tf.int32):
+def tf_pad(letters: tf.int32, diacritics: tf.int32):
     letters = tf.pad(letters, [[0, SEQUENCE_LENGTH]], constant_values=0)[:SEQUENCE_LENGTH]
     diacritics = tf.pad(diacritics, [[0, SEQUENCE_LENGTH]], constant_values=0)[:SEQUENCE_LENGTH]
-    return (letters, tf.cast(letters > 0, tf.int32)), diacritics
+    return letters, diacritics
 
 
 @tf.function
@@ -124,25 +124,12 @@ def tf_data_processing(text: tf.string):
     text = tf_normalize_entities(text)
     letters, diacritics = tf_separate_diacritics(text)
     encoded_letters, encoded_diacritics = tf_encode(letters, diacritics)
-    return tf_pad_with_attention_mask(encoded_letters, encoded_diacritics)
+    return tf_pad(encoded_letters, encoded_diacritics)
 
 
 @tf.function
 def no_padding_accuracy(y_true, y_pred):
     return tf.reduce_mean(tf.cast(tf.equal(y_true, tf.cast(tf.argmax(y_pred, axis=-1), tf.float32))[tf.greater(y_true, 0)], tf.float32))
-
-
-class XLNetDiacritizationModel(TFXLNetModel):
-
-    def __init__(self, config, *inputs, **kwargs):
-        super(XLNetDiacritizationModel, self).__init__(config, *inputs, **kwargs)
-        self.classifier = tf.keras.layers.TimeDistributed(tf.keras.layers.Dense(len(DIACS)+1),
-                                                          input_shape=(SEQUENCE_LENGTH, self.config.d_model))
-
-    def call(self, inputs, **kwargs):
-        return self.classifier(
-            tf.keras.activations.tanh(super(XLNetDiacritizationModel, self).call(inputs, **kwargs)[0])
-        )
 
 
 def download_data(data_dir, download_url):
@@ -154,20 +141,21 @@ def download_data(data_dir, download_url):
                             cache_subdir=str(data_dir.absolute()), extract=True)
 
 
-def _get_xlnet(params_dir):
+def get_model(params_dir):
     assert isinstance(params_dir, Path)
-    config = XLNetConfig.from_pretrained(PRETRAINED_MODEL_NAME, cache_dir=str(params_dir.absolute()),
-                                         vocab_size=len(CHARS) + 1)
-    xlnet = XLNetDiacritizationModel(config)
-    xlnet.compile(OPTIMIZER, tf.keras.losses.SparseCategoricalCrossentropy(True), [no_padding_accuracy])
-    xlnet((np.zeros((1, SEQUENCE_LENGTH), np.int), np.zeros((1, SEQUENCE_LENGTH), np.int)))
+    model = Sequential([
+        Embedding(len(CHARS)+1, 128, input_length=SEQUENCE_LENGTH),
+        Bidirectional(LSTM(128, return_sequences=True, dropout=0.1)),
+        TimeDistributed(Dense(len(DIACS)+1))
+    ], name='BLSTM128')
+    model.compile(OPTIMIZER, tf.keras.losses.SparseCategoricalCrossentropy(True), [no_padding_accuracy])
     last_iteration = 0
-    weight_files = sorted([x.name for x in params_dir.glob(xlnet.name + '-*.h5')])
+    weight_files = sorted([x.name for x in params_dir.glob(model.name + '-*.h5')])
     if len(weight_files) > 0:
         last_weights_file = str(params_dir.joinpath(weight_files[-1]).absolute())
         last_iteration = int(last_weights_file.split('-')[-1].split('.')[0])
-        xlnet.load_weights(last_weights_file)
-    return xlnet, last_iteration
+        model.load_weights(last_weights_file)
+    return model, last_iteration
 
 
 def train(data_dir, params_dir, epochs, batch_size, early_stop):
@@ -179,19 +167,22 @@ def train(data_dir, params_dir, epochs, batch_size, early_stop):
     train_file_paths = [str(data_dir.joinpath(p)) for p in data_dir.glob('*train*.txt')]
     val_file_paths = [str(data_dir.joinpath(p)) for p in data_dir.glob('*val*.txt')]
     train_dataset = tf.data.TextLineDataset(train_file_paths).repeat()\
-        .map(tf_data_processing, tf.data.experimental.AUTOTUNE).batch(batch_size, True).prefetch(1)
+        .map(tf_data_processing, tf.data.experimental.AUTOTUNE).batch(batch_size, True)\
+        .prefetch(tf.data.experimental.AUTOTUNE)
     val_dataset = tf.data.TextLineDataset(val_file_paths).repeat()\
-        .map(tf_data_processing, tf.data.experimental.AUTOTUNE).batch(batch_size, True).prefetch(1)
-    train_steps = tf.data.TextLineDataset(train_file_paths).batch(batch_size) \
+        .map(tf_data_processing, tf.data.experimental.AUTOTUNE).batch(batch_size, True)\
+        .prefetch(tf.data.experimental.AUTOTUNE)
+    train_steps = tf.data.TextLineDataset(train_file_paths).batch(batch_size)\
         .reduce(0, lambda old, new: old + 1).numpy()
-    val_steps = tf.data.TextLineDataset(val_file_paths).batch(batch_size) \
+    val_steps = tf.data.TextLineDataset(val_file_paths).batch(batch_size)\
         .reduce(0, lambda old, new: old + 1).numpy()
-    xlnet, last_iteration = _get_xlnet(params_dir)
-    xlnet.fit(train_dataset, steps_per_epoch=train_steps, epochs=epochs, validation_data=val_dataset,
+    model, last_iteration = get_model(params_dir)
+    model.fit(train_dataset, steps_per_epoch=train_steps, epochs=epochs, validation_data=val_dataset,
               validation_steps=val_steps, initial_epoch=last_iteration,  # TODO: Think about the classes and their weights.
-              callbacks=[tf.keras.callbacks.EarlyStopping(patience=early_stop, verbose=1, restore_best_weights=True),
+              callbacks=[tf.keras.callbacks.EarlyStopping(patience=early_stop, verbose=1, restore_best_weights=True,
+                                                          monitor='loss'),
                          tf.keras.callbacks.ModelCheckpoint(
-                             str(params_dir.joinpath(xlnet.name+'-{epoch:03d}.h5').absolute()), save_best_only=True,
+                             str(params_dir.joinpath(model.name+'-{epoch:03d}.h5').absolute()), save_best_only=True,
                              save_weights_only=True,
                          ),
                          tf.keras.callbacks.TerminateOnNaN(), tf.keras.callbacks.TensorBoard(str(data_dir.absolute()))]
@@ -206,5 +197,5 @@ def test(data_dir, params_dir, batch_size):
         .map(tf_data_processing, tf.data.experimental.AUTOTUNE).batch(batch_size, True).prefetch(1)
     test_steps = tf.data.TextLineDataset(test_file_paths).batch(batch_size)\
         .reduce(0, lambda old, new: old + 1).numpy()
-    xlnet, last_iteration = _get_xlnet(params_dir)
-    print(xlnet.evaluate(test_dataset, steps=test_steps))
+    model, last_iteration = get_model(params_dir)
+    print(model.evaluate(test_dataset, steps=test_steps))
