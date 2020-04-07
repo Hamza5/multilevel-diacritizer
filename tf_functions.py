@@ -10,9 +10,9 @@ from processing import DIACRITICS, NUMBER, NUMBER_PATTERN, ARABIC_LETTERS, SEPAR
 
 DATASET_FILE_NAME = 'Tashkeela-processed.zip'
 SEQUENCE_LENGTH = 100  # TODO: Need to change this to a more accurate value.
-PRETRAINED_MODEL_NAME = 'xlnet-base-cased'
 OPTIMIZER = tf.keras.optimizers.RMSprop()
 TF_CHAR_ENCODING = 'UTF8_CHAR'
+MONITOR_VALUE = 'loss'
 
 
 @tf.function
@@ -146,8 +146,9 @@ def get_model(params_dir):
     model = Sequential([
         Embedding(len(CHARS)+1, 128, input_length=SEQUENCE_LENGTH),
         Bidirectional(LSTM(128, return_sequences=True, dropout=0.1)),
+        Bidirectional(LSTM(32, return_sequences=True, dropout=0.1)),
         TimeDistributed(Dense(len(DIACS)+1))
-    ], name='BLSTM128')
+    ], name='BLSTM128-BLSTM32')
     model.compile(OPTIMIZER, tf.keras.losses.SparseCategoricalCrossentropy(True), [no_padding_accuracy])
     last_iteration = 0
     weight_files = sorted([x.name for x in params_dir.glob(model.name + '-*.h5')])
@@ -180,10 +181,10 @@ def train(data_dir, params_dir, epochs, batch_size, early_stop):
     model.fit(train_dataset, steps_per_epoch=train_steps, epochs=epochs, validation_data=val_dataset,
               validation_steps=val_steps, initial_epoch=last_iteration,  # TODO: Think about the classes and their weights.
               callbacks=[tf.keras.callbacks.EarlyStopping(patience=early_stop, verbose=1, restore_best_weights=True,
-                                                          monitor='loss'),
+                                                          monitor=MONITOR_VALUE),
                          tf.keras.callbacks.ModelCheckpoint(
                              str(params_dir.joinpath(model.name+'-{epoch:03d}.h5').absolute()), save_best_only=True,
-                             save_weights_only=True,
+                             save_weights_only=True, monitor=MONITOR_VALUE
                          ),
                          tf.keras.callbacks.TerminateOnNaN(), tf.keras.callbacks.TensorBoard(str(data_dir.absolute()))]
               )
