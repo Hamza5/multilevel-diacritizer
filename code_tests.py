@@ -1,6 +1,8 @@
 import unittest
 from random import randint, choices, choice
 
+import numpy as np
+
 from processing import *
 from tf_functions import *
 
@@ -127,13 +129,25 @@ class TFFunctionsTestCase(unittest.TestCase):
 
     def test_hash_tables(self):
         self.assertEqual(len(DIACS), 15)
-        self.assertEqual(len(CHARS), 38)
+        self.assertEqual(len(CHARS), 18)
         for char in CHARS:
             self.assertIsInstance(char, str)
             self.assertEqual(len(char), 1)
         for diac in DIACS:
             self.assertIsInstance(diac, str)
             self.assertLessEqual(len(diac), 2)
+        sentences = [
+            'عَزْل الأشخاص أو الحيوانات أو النباتات الوافدة من منطقة موبوءة بالأمراض المُعْديّة',
+            'افترض أعطى فَرَضِيَّةً لمسألةٍ ما',
+            'في أَوْصَافٍ تَخْتَلِفُ مَعَانِيهَا باخْتِلاَفِ المَوْصُوفِ بِهَا',
+            'الكلمات الاكثر بحثا'
+        ]
+        with tf.device('/CPU:0'):
+            for s in sentences:
+                self.assertTrue(tf.reduce_all(
+                    tf.not_equal(LETTERS_TABLE.lookup(tf_separate_diacritics(tf_convert_to_pattern(tf.constant(s)))[0]),
+                                 0)).numpy()
+                )
         self.assertTrue(tf.reduce_all(tf.not_equal(LETTERS_TABLE.lookup(tf.constant(CHARS)), 0)).numpy())
         self.assertTrue(tf.reduce_all(tf.not_equal(DIACRITICS_TABLE.lookup(tf.constant(DIACS)), 0)).numpy())
 
@@ -146,10 +160,11 @@ class TFFunctionsTestCase(unittest.TestCase):
             'ف': ['', 'ف', ''],
             'يكملان': ['', 'يكمل', 'ان']
         }
-        for w, p in words_partitions.items():
-            self.assertTrue(
-                tf.reduce_all(tf.equal(tf_separate_affixes(tf.constant(w)), tf.constant(p)))
-            )
+        with tf.device('/CPU:0'):
+            for w, p in words_partitions.items():
+                self.assertTrue(
+                    tf.reduce_all(tf.equal(tf_separate_affixes(tf.constant(w)), tf.constant(p)))
+                )
 
     def test_word_to_pattern(self):
         words_patterns = {
@@ -174,10 +189,11 @@ class TFFunctionsTestCase(unittest.TestCase):
             'فسَماءٌ': 'فحَحاءٌ',
             'مسميات': 'حححيات',
         }
-        for w, p in words_patterns.items():
-            self.assertTrue(
-                tf.reduce_all(tf.equal(tf_word_to_pattern(tf.constant(w)), tf.constant(p)))
-            )
+        with tf.device('/CPU:0'):
+            for w, p in words_patterns.items():
+                self.assertTrue(
+                    tf.reduce_all(tf.equal(tf_word_to_pattern(tf.constant(w)), tf.constant(p)))
+                )
 
     def test_separate_diacritics(self):
         ds = 'أوَائِلَ الأشياء: الصُّبْحُ أوَّلُ النَّهارِ، الْوَسْمِيُّ أوَّلُ المَطرِ.'
@@ -198,10 +214,11 @@ class TFFunctionsTestCase(unittest.TestCase):
         )
 
     def test_convert_to_pattern(self):
-        self.assertEqual(
-            tf_convert_to_pattern(tf.constant('الدَّعْوَى: اسم ما يُدَّعَى.')),
-            tf.constant('الحَّحْوَا: احح حا يُحَّحَا.')
-        )
+        with tf.device('/CPU:0'):
+            self.assertEqual(
+                tf_convert_to_pattern(tf.constant('الدَّعْوَى: اسم ما يُدَّعَى.')),
+                tf.constant('الحَّحْوَا: احح حا يُحَّحَا.')
+            )
 
 
 if __name__ == '__main__':
