@@ -9,7 +9,7 @@ from processing import DIACRITICS, NUMBER, NUMBER_PATTERN, SEPARATED_SUFFIXES, S
     HAMZAT_PATTERN, ORDINARY_ARABIC_LETTERS_PATTERN
 
 DATASET_FILE_NAME = 'Tashkeela-processed.zip'
-SEQUENCE_LENGTH = 512  # TODO: Need to change this to a more accurate value.
+SEQUENCE_LENGTH = 256
 OPTIMIZER = tf.keras.optimizers.RMSprop()
 TF_CHAR_ENCODING = 'UTF8_CHAR'
 MONITOR_VALUE = 'loss'
@@ -93,7 +93,7 @@ def tf_merge_diacritics(letters: tf.string, diacritics: tf.string):
 def tf_normalize_entities(text: tf.string):
     return tf.strings.strip(tf.strings.regex_replace(tf.strings.regex_replace(tf.strings.regex_replace(
         tf.strings.regex_replace(text, NUMBER_PATTERN.pattern, NUMBER),
-        r'([^\p{Arabic}\p{P}\s'+''.join(DIACRITICS)+'])+', ''),
+        r'([^\p{Arabic}\p{P}\d\s'+''.join(DIACRITICS)+'])+', ''),
         r'\p{P}+', ''), r'\s{2,}', ' '))
 
 
@@ -146,9 +146,9 @@ def get_model(params_dir):
     model = Sequential([
         Embedding(len(CHARS)+1, 128, input_length=SEQUENCE_LENGTH),
         Bidirectional(LSTM(128, return_sequences=True, dropout=0.1)),
-        Bidirectional(LSTM(32, return_sequences=True, dropout=0.1)),
+        Bidirectional(LSTM(64, return_sequences=True, dropout=0.1)),
         TimeDistributed(Dense(len(DIACS)+1))
-    ], name='BLSTM128-BLSTM32')
+    ], name='BLSTM128-BLSTM64')
     model.compile(OPTIMIZER, tf.keras.losses.SparseCategoricalCrossentropy(True), [no_padding_accuracy])
     last_iteration = 0
     weight_files = sorted([x.name for x in params_dir.glob(model.name + '-*.h5')])
@@ -190,13 +190,11 @@ def train(data_dir, params_dir, epochs, batch_size, early_stop):
               )
 
 
-def test(data_dir, params_dir, batch_size):
+def test(data_dir, params_dir):
     assert isinstance(data_dir, Path)
     assert isinstance(params_dir, Path)
     test_file_paths = [str(data_dir.joinpath(p)) for p in data_dir.glob('*test*.txt')]
-    test_dataset = tf.data.TextLineDataset(test_file_paths).repeat()\
-        .map(tf_data_processing, tf.data.experimental.AUTOTUNE).batch(batch_size, True).prefetch(1)
-    test_steps = tf.data.TextLineDataset(test_file_paths).batch(batch_size)\
-        .reduce(0, lambda old, new: old + 1).numpy()
+    test_dataset = tf.data.TextLineDataset(test_file_paths).map(tf_data_processing, tf.data.experimental.AUTOTUNE)
+    test_steps = tf.data.TextLineDataset(test_file_paths).reduce(0, lambda old, new: old + 1).numpy()
     model, last_iteration = get_model(params_dir)
     print(model.evaluate(test_dataset, steps=test_steps))

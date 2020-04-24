@@ -219,6 +219,12 @@ class TFFunctionsTestCase(unittest.TestCase):
                 tf_convert_to_pattern(tf.constant('الدَّعْوَى: اسم ما يُدَّعَى.')),
                 tf.constant('الحَّحْوَا: احح حا يُحَّحَا.')
             )
+    
+    def test_normalize_entities(self):
+        self.assertEqual(
+            tf_normalize_entities(tf.constant('تم الرّد عليه منذ 3 أيّام <هنا>.x')),
+            tf.constant('تم الرّد عليه منذ 0 أيّام هنا')
+        )
 
 
 if __name__ == '__main__':
