@@ -4,6 +4,7 @@ import tensorflow as tf
 from tensorflow.keras import Sequential
 from tensorflow.keras.layers import Embedding, LSTM, Dense, TimeDistributed, Bidirectional
 # tf.config.experimental_run_functions_eagerly(True)
+import numpy as np
 
 from processing import DIACRITICS, NUMBER, NUMBER_PATTERN, SEPARATED_SUFFIXES, SEPARATED_PREFIXES, MIN_STEM_LEN,\
     HAMZAT_PATTERN, ORDINARY_ARABIC_LETTERS_PATTERN
@@ -98,7 +99,7 @@ def tf_normalize_entities(text: tf.string):
 
 
 CHARS = sorted({'ح', 'ء', 'ة', NUMBER, ' '}.union(''.join(SEPARATED_PREFIXES.union(SEPARATED_SUFFIXES))))
-DIACS = sorted(DIACRITICS.difference({'ّ'}).union({''}).union('ّ'+x for x in DIACRITICS.difference({'ّ'})))
+DIACS = sorted(DIACRITICS.difference({'ّ'}).union({''}).union('ّ'+x for x in DIACRITICS.difference({'ّ', 'ْ'})))
 LETTERS_TABLE = tf.lookup.StaticHashTable(
         tf.lookup.KeyValueTensorInitializer(tf.constant(CHARS), tf.range(1, len(CHARS)+1)), 0
 )
@@ -175,11 +176,21 @@ def train(data_dir, params_dir, epochs, batch_size, early_stop):
         .prefetch(tf.data.experimental.AUTOTUNE)
     train_steps = tf.data.TextLineDataset(train_file_paths).batch(batch_size)\
         .reduce(0, lambda old, new: old + 1).numpy()
+    print('Calculating diacritics weights...')
+    labels = tf.data.TextLineDataset(train_file_paths).map(tf_data_processing, tf.data.experimental.AUTOTUNE)\
+        .map(lambda x, y: y)
+    diac_weights = np.zeros(len(DIACS)+1)
+    for ls in labels:
+        uniques, counts = np.unique(ls, return_counts=True)
+        diac_weights[uniques] += counts
+    diac_weights = np.max(diac_weights)/diac_weights
+    print(diac_weights)
     val_steps = tf.data.TextLineDataset(val_file_paths).batch(batch_size)\
         .reduce(0, lambda old, new: old + 1).numpy()
     model, last_iteration = get_model(params_dir)
     model.fit(train_dataset, steps_per_epoch=train_steps, epochs=epochs, validation_data=val_dataset,
-              validation_steps=val_steps, initial_epoch=last_iteration,  # TODO: Think about the classes and their weights.
+              validation_steps=val_steps, initial_epoch=last_iteration,
+              class_weight=dict(enumerate(diac_weights)),
               callbacks=[tf.keras.callbacks.EarlyStopping(patience=early_stop, verbose=1, restore_best_weights=True,
                                                           monitor=MONITOR_VALUE),
                          tf.keras.callbacks.ModelCheckpoint(

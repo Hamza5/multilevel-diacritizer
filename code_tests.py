@@ -1,8 +1,6 @@
 import unittest
 from random import randint, choices, choice
 
-import numpy as np
-
 from processing import *
 from tf_functions import *
 
@@ -128,7 +126,7 @@ class TFFunctionsTestCase(unittest.TestCase):
         self.assertTrue(tf.reduce_all(tf.equal(tf_max_length_pairs(x), tf.constant(['c', 'yz']))))
 
     def test_hash_tables(self):
-        self.assertEqual(len(DIACS), 15)
+        self.assertEqual(len(DIACS), 14)
         self.assertEqual(len(CHARS), 18)
         for char in CHARS:
             self.assertIsInstance(char, str)

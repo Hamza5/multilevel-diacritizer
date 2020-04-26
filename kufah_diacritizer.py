@@ -34,8 +34,6 @@ if __name__ == '__main__':
                              help='Directory which contains vocabulary and data files.')
     test_parser.add_argument('--params-dir', '-p', type=Path, default=PARAMS_DIR,
                              help='Directory containing the model parameters.')
-    test_parser.add_argument('--batch-size', '-b', type=int, default=BATCH_SIZE,
-                             help='Maximum number of elements in a single batch.')
     args = main_parser.parse_args()
     if args.subcommand == 'download-data':
         download_data(args.data_dir, args.url)
@@ -44,4 +42,4 @@ if __name__ == '__main__':
         train(args.data_dir, args.params_dir, args.train_steps, args.batch_size, args.early_stopping_steps)
         print('Trained.')
     elif args.subcommand == 'test':
-        test(args.data_dir, args.params_dir, args.batch_size)
+        test(args.data_dir, args.params_dir)
