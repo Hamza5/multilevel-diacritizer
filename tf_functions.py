@@ -204,8 +204,23 @@ def train(data_dir, params_dir, epochs, batch_size, early_stop):
 def test(data_dir, params_dir):
     assert isinstance(data_dir, Path)
     assert isinstance(params_dir, Path)
-    test_file_paths = [str(data_dir.joinpath(p)) for p in data_dir.glob('*test*.txt')]
+    test_file_paths = [str(p.absolute()) for p in data_dir.glob('*test*.txt')]
     test_dataset = tf.data.TextLineDataset(test_file_paths).map(tf_data_processing, tf.data.experimental.AUTOTUNE)
-    test_steps = tf.data.TextLineDataset(test_file_paths).reduce(0, lambda old, new: old + 1).numpy()
     model, last_iteration = get_model(params_dir)
-    print(model.evaluate(test_dataset, steps=test_steps))
+    cumulative_der1 = 0
+    test_steps = 0
+    for x, y in test_dataset:
+        x = x.numpy().reshape((1,)+x.numpy().shape)
+        y = y.numpy()
+        y_pred = np.argmax(model.predict(x)[0], axis=-1)
+        cumulative_der1 += der1(x[0], y, y_pred)
+        test_steps += 1
+    print('DER1 = {:.2%}'.format(cumulative_der1/test_steps))
+
+
+def der1(x, y_true, y_pred):
+    assert isinstance(x, np.ndarray)
+    assert isinstance(y_true, np.ndarray)
+    assert isinstance(y_pred, np.ndarray)
+    arabic_letters_pos = x > 2
+    return 1 - np.sum(y_pred[arabic_letters_pos] == y_true[arabic_letters_pos]) / np.sum(arabic_letters_pos)
