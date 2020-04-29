@@ -1,3 +1,4 @@
+import sys
 from pathlib import Path
 
 import tensorflow as tf
@@ -206,21 +207,37 @@ def test(data_dir, params_dir):
     assert isinstance(params_dir, Path)
     test_file_paths = [str(p.absolute()) for p in data_dir.glob('*test*.txt')]
     test_dataset = tf.data.TextLineDataset(test_file_paths).map(tf_data_processing, tf.data.experimental.AUTOTUNE)
+    test_steps = int(tf.data.TextLineDataset(test_file_paths).reduce(0, lambda old, new: old + 1).numpy())
     model, last_iteration = get_model(params_dir)
     cumulative_der1 = 0
-    test_steps = 0
+    cumulative_der2 = 0
+    s = 0
+    print('Testing...')
     for x, y in test_dataset:
         x = x.numpy().reshape((1,)+x.numpy().shape)
         y = y.numpy()
         y_pred = np.argmax(model.predict(x)[0], axis=-1)
         cumulative_der1 += der1(x[0], y, y_pred)
-        test_steps += 1
-    print('DER1 = {:.2%}'.format(cumulative_der1/test_steps))
+        cumulative_der2 += der2(x[0], y, y_pred)
+        s += 1
+        print_progress_bar(s, test_steps)
+    print('\nDER1 = {:.2%} | DER2 = {:.2%}'.format(cumulative_der1/s, cumulative_der2/s))
 
 
 def der1(x, y_true, y_pred):
-    assert isinstance(x, np.ndarray)
-    assert isinstance(y_true, np.ndarray)
-    assert isinstance(y_pred, np.ndarray)
     arabic_letters_pos = x > 2
     return 1 - np.sum(y_pred[arabic_letters_pos] == y_true[arabic_letters_pos]) / np.sum(arabic_letters_pos)
+
+
+def der2(x, y_true, y_pred):
+    arabic_letters_pos = np.logical_and(x > 2, np.concatenate((x[1:], [1])) > 1)
+    return 1 - np.sum(y_pred[arabic_letters_pos] == y_true[arabic_letters_pos]) / np.sum(arabic_letters_pos)
+
+
+def print_progress_bar(current, maximum):
+    assert isinstance(current, int)
+    assert isinstance(maximum, int)
+    progress_text = '[{:50s}] {:d}/{:d} ({:0.2%})'.format('=' * int(current / maximum * 50), current, maximum,
+                                                          current / maximum)
+    sys.stdout.write('\r' + progress_text)
+    sys.stdout.flush()
