@@ -210,6 +210,7 @@ def test(data_dir, params_dir):
     test_steps = int(tf.data.TextLineDataset(test_file_paths).reduce(0, lambda old, new: old + 1).numpy())
     model, last_iteration = get_model(params_dir)
     cumulative_der1 = 0
+    cumulative_wer1 = 0
     cumulative_der2 = 0
     s = 0
     print('Testing...')
@@ -218,10 +219,13 @@ def test(data_dir, params_dir):
         y = y.numpy()
         y_pred = np.argmax(model.predict(x)[0], axis=-1)
         cumulative_der1 += der1(x[0], y, y_pred)
+        cumulative_wer1 += wer1(x[0], y, y_pred)
         cumulative_der2 += der2(x[0], y, y_pred)
         s += 1
         print_progress_bar(s, test_steps)
-    print('\nDER1 = {:.2%} | DER2 = {:.2%}'.format(cumulative_der1/s, cumulative_der2/s))
+    print('\nDER1 = {:.2%} | DER2 = {:.2%} | WER1 = {:.2%}'.format(
+        cumulative_der1/s, cumulative_der2/s, cumulative_wer1/s
+    ))
 
 
 def der1(x, y_true, y_pred):
@@ -232,6 +236,19 @@ def der1(x, y_true, y_pred):
 def der2(x, y_true, y_pred):
     arabic_letters_pos = np.logical_and(x > 2, np.concatenate((x[1:], [1])) > 1)
     return 1 - np.sum(y_pred[arabic_letters_pos] == y_true[arabic_letters_pos]) / np.sum(arabic_letters_pos)
+
+
+def wer1(x, y_true, y_pred):
+    no_pad = x > 0
+    x = x[no_pad]
+    y_true = y_true[no_pad]
+    y_pred = y_pred[no_pad]
+    y_true_words = np.split(y_true, np.nonzero(x == 1)[0])
+    y_pred_words = np.split(y_pred, np.nonzero(x == 1)[0])
+    num_correct = 0
+    for t_w, p_w in zip(y_true_words, y_pred_words):
+        num_correct += int(np.all(t_w == p_w))
+    return 1 - num_correct / len(y_true_words)
 
 
 def print_progress_bar(current, maximum):
