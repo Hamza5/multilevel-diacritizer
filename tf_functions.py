@@ -7,8 +7,8 @@ from tensorflow.keras.layers import Embedding, LSTM, Dense, TimeDistributed, Bid
 # tf.config.experimental_run_functions_eagerly(True)
 import numpy as np
 
-from processing import DIACRITICS, NUMBER, NUMBER_PATTERN, SEPARATED_SUFFIXES, SEPARATED_PREFIXES, MIN_STEM_LEN,\
-    HAMZAT_PATTERN, ORDINARY_ARABIC_LETTERS_PATTERN
+from processing import DIACRITICS, NUMBER, NUMBER_PATTERN, SEPARATED_SUFFIXES, SEPARATED_PREFIXES, MIN_STEM_LEN, \
+    HAMZAT_PATTERN, ORDINARY_ARABIC_LETTERS_PATTERN, ARABIC_LETTERS
 
 DATASET_FILE_NAME = 'Tashkeela-processed.zip'
 SEQUENCE_LENGTH = 256
@@ -99,7 +99,7 @@ def tf_normalize_entities(text: tf.string):
         r'\p{P}+', ''), r'\s{2,}', ' '))
 
 
-CHARS = sorted({'ح', 'ء', 'ة', NUMBER, ' '}.union(''.join(SEPARATED_PREFIXES.union(SEPARATED_SUFFIXES))))
+CHARS = sorted(ARABIC_LETTERS.union({NUMBER, ' '}))
 DIACS = sorted(DIACRITICS.difference({'ّ'}).union({''}).union('ّ'+x for x in DIACRITICS.difference({'ّ', 'ْ'})))
 LETTERS_TABLE = tf.lookup.StaticHashTable(
         tf.lookup.KeyValueTensorInitializer(tf.constant(CHARS), tf.range(1, len(CHARS)+1)), 0
@@ -123,7 +123,7 @@ def tf_pad(letters: tf.int32, diacritics: tf.int32):
 
 @tf.function
 def tf_data_processing(text: tf.string):
-    text = tf_convert_to_pattern(tf_normalize_entities(text))
+    text = tf_normalize_entities(text)
     letters, diacritics = tf_separate_diacritics(text)
     encoded_letters, encoded_diacritics = tf_encode(letters, diacritics)
     return tf_pad(encoded_letters, encoded_diacritics)
@@ -185,7 +185,6 @@ def train(data_dir, params_dir, epochs, batch_size, early_stop):
         uniques, counts = np.unique(ls, return_counts=True)
         diac_weights[uniques] += counts
     diac_weights = np.max(diac_weights)/diac_weights
-    print(diac_weights)
     val_steps = tf.data.TextLineDataset(val_file_paths).batch(batch_size)\
         .reduce(0, lambda old, new: old + 1).numpy()
     model, last_iteration = get_model(params_dir)

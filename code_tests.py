@@ -127,7 +127,7 @@ class TFFunctionsTestCase(unittest.TestCase):
 
     def test_hash_tables(self):
         self.assertEqual(len(DIACS), 14)
-        self.assertEqual(len(CHARS), 18)
+        self.assertEqual(len(CHARS), 38)
         for char in CHARS:
             self.assertIsInstance(char, str)
             self.assertEqual(len(char), 1)
@@ -143,7 +143,7 @@ class TFFunctionsTestCase(unittest.TestCase):
         with tf.device('/CPU:0'):
             for s in sentences:
                 self.assertTrue(tf.reduce_all(
-                    tf.not_equal(LETTERS_TABLE.lookup(tf_separate_diacritics(tf_convert_to_pattern(tf.constant(s)))[0]),
+                    tf.not_equal(LETTERS_TABLE.lookup(tf_separate_diacritics(tf.constant(s))[0]),
                                  0)).numpy()
                 )
         self.assertTrue(tf.reduce_all(tf.not_equal(LETTERS_TABLE.lookup(tf.constant(CHARS)), 0)).numpy())
