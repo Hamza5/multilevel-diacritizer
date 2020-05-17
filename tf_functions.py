@@ -11,7 +11,8 @@ from processing import DIACRITICS, NUMBER, NUMBER_PATTERN, SEPARATED_SUFFIXES, S
     HAMZAT_PATTERN, ORDINARY_ARABIC_LETTERS_PATTERN, ARABIC_LETTERS
 
 DATASET_FILE_NAME = 'Tashkeela-processed.zip'
-SEQUENCE_LENGTH = 256
+WINDOW_SIZE = 21
+SLIDING_STEP = WINDOW_SIZE // 2
 OPTIMIZER = tf.keras.optimizers.RMSprop()
 TF_CHAR_ENCODING = 'UTF8_CHAR'
 MONITOR_VALUE = 'loss'
@@ -115,18 +116,11 @@ def tf_encode(letters: tf.string, diacritics: tf.string):
 
 
 @tf.function
-def tf_pad(letters: tf.int32, diacritics: tf.int32):
-    letters = tf.pad(letters, [[0, SEQUENCE_LENGTH]], constant_values=0)[:SEQUENCE_LENGTH]
-    diacritics = tf.pad(diacritics, [[0, SEQUENCE_LENGTH]], constant_values=0)[:SEQUENCE_LENGTH]
-    return letters, diacritics
-
-
-@tf.function
 def tf_data_processing(text: tf.string):
     text = tf_normalize_entities(text)
     letters, diacritics = tf_separate_diacritics(text)
     encoded_letters, encoded_diacritics = tf_encode(letters, diacritics)
-    return tf_pad(encoded_letters, encoded_diacritics)
+    return tf.pad(encoded_letters, [[0, 1]]), tf.pad(encoded_diacritics, [[0, 1]])
 
 
 @tf.function
@@ -146,11 +140,11 @@ def download_data(data_dir, download_url):
 def get_model(params_dir):
     assert isinstance(params_dir, Path)
     model = Sequential([
-        Embedding(len(CHARS)+1, 128, input_length=SEQUENCE_LENGTH),
+        Embedding(len(CHARS)+1, 128, input_length=WINDOW_SIZE),
         Bidirectional(LSTM(128, return_sequences=True, dropout=0.1)),
         Bidirectional(LSTM(64, return_sequences=True, dropout=0.1)),
         TimeDistributed(Dense(len(DIACS)+1))
-    ], name='BLSTM128-BLSTM64')
+    ], name='E128-BLSTM128-BLSTM64-w{}s{}'.format(WINDOW_SIZE, SLIDING_STEP))
     model.compile(OPTIMIZER, tf.keras.losses.SparseCategoricalCrossentropy(True), [no_padding_accuracy])
     last_iteration = 0
     weight_files = sorted([x.name for x in params_dir.glob(model.name + '-*.h5')])
@@ -161,6 +155,15 @@ def get_model(params_dir):
     return model, last_iteration
 
 
+def get_processed_dataset(file_paths, batch_size):
+    dataset = tf.data.TextLineDataset(file_paths).map(tf_data_processing, tf.data.experimental.AUTOTUNE)\
+        .unbatch().window(WINDOW_SIZE, SLIDING_STEP, drop_remainder=True)\
+        .flat_map(lambda x, y: tf.data.Dataset.zip((x, y))).batch(WINDOW_SIZE, True)\
+        .prefetch(tf.data.experimental.AUTOTUNE).batch(batch_size, True)
+    size = dataset.reduce(0, lambda old, new: old + 1).numpy()
+    return dataset, size
+
+
 def train(data_dir, params_dir, epochs, batch_size, early_stop):
     assert isinstance(data_dir, Path)
     assert isinstance(params_dir, Path)
@@ -169,14 +172,10 @@ def train(data_dir, params_dir, epochs, batch_size, early_stop):
     assert isinstance(early_stop, int)
     train_file_paths = [str(p.absolute()) for p in data_dir.glob('*train*.txt')]
     val_file_paths = [str(p.absolute()) for p in data_dir.glob('*val*.txt')]
-    train_dataset = tf.data.TextLineDataset(train_file_paths).repeat()\
-        .map(tf_data_processing, tf.data.experimental.AUTOTUNE).batch(batch_size, True)\
-        .prefetch(tf.data.experimental.AUTOTUNE)
-    val_dataset = tf.data.TextLineDataset(val_file_paths).repeat()\
-        .map(tf_data_processing, tf.data.experimental.AUTOTUNE).batch(batch_size, True)\
-        .prefetch(tf.data.experimental.AUTOTUNE)
-    train_steps = tf.data.TextLineDataset(train_file_paths).batch(batch_size)\
-        .reduce(0, lambda old, new: old + 1).numpy()
+    print('Generating the training set...')
+    train_dataset, train_steps = get_processed_dataset(train_file_paths, batch_size)
+    print('Generating the validation set...')
+    val_dataset, val_steps = get_processed_dataset(val_file_paths, batch_size)
     print('Calculating diacritics weights...')
     labels = tf.data.TextLineDataset(train_file_paths).map(tf_data_processing, tf.data.experimental.AUTOTUNE)\
         .map(lambda x, y: y)
@@ -185,10 +184,8 @@ def train(data_dir, params_dir, epochs, batch_size, early_stop):
         uniques, counts = np.unique(ls, return_counts=True)
         diac_weights[uniques] += counts
     diac_weights = np.max(diac_weights)/diac_weights
-    val_steps = tf.data.TextLineDataset(val_file_paths).batch(batch_size)\
-        .reduce(0, lambda old, new: old + 1).numpy()
     model, last_iteration = get_model(params_dir)
-    model.fit(train_dataset, steps_per_epoch=train_steps, epochs=epochs, validation_data=val_dataset,
+    model.fit(train_dataset.repeat(), steps_per_epoch=train_steps, epochs=epochs, validation_data=val_dataset.repeat(),
               validation_steps=val_steps, initial_epoch=last_iteration,
               class_weight=dict(enumerate(diac_weights)),
               callbacks=[tf.keras.callbacks.EarlyStopping(patience=early_stop, verbose=1, restore_best_weights=True,
@@ -205,8 +202,8 @@ def test(data_dir, params_dir):
     assert isinstance(data_dir, Path)
     assert isinstance(params_dir, Path)
     test_file_paths = [str(p.absolute()) for p in data_dir.glob('*test*.txt')]
-    test_dataset = tf.data.TextLineDataset(test_file_paths).map(tf_data_processing, tf.data.experimental.AUTOTUNE)
-    test_steps = int(tf.data.TextLineDataset(test_file_paths).reduce(0, lambda old, new: old + 1).numpy())
+    test_dataset, test_steps = get_processed_dataset(test_file_paths, 1)
+    test_dataset, test_steps = test_dataset.unbatch(), int(test_steps)
     model, last_iteration = get_model(params_dir)
     cumulative_der1 = 0
     cumulative_wer1 = 0
@@ -215,13 +212,13 @@ def test(data_dir, params_dir):
     s = 0
     print('Testing...')
     for x, y in test_dataset:
-        x = x.numpy().reshape((1,)+x.numpy().shape)
+        x = x.numpy()
         y = y.numpy()
-        y_pred = np.argmax(model.predict(x)[0], axis=-1)
-        cumulative_der1 += der(x[0], y, y_pred)
-        cumulative_wer1 += wer(x[0], y, y_pred)
-        cumulative_der2 += der(x[0], y, y_pred, True)
-        cumulative_wer2 += wer(x[0], y, y_pred, True)
+        y_pred = np.argmax(model.predict(x.reshape((1,)+x.shape))[0], axis=-1)
+        cumulative_der1 += der(x, y, y_pred)
+        cumulative_wer1 += wer(x, y, y_pred)
+        cumulative_der2 += der(x, y, y_pred, True)
+        cumulative_wer2 += wer(x, y, y_pred, True)
         s += 1
         print_progress_bar(s, test_steps)
     print('\nDER1 = {:.2%} | DER2 = {:.2%} | WER1 = {:.2%} | WER2 = {:.2%}'.format(
@@ -234,7 +231,9 @@ def der(x, y_true, y_pred, exclude_syntactic=False):
         arabic_letters_pos = x > 2
     else:
         arabic_letters_pos = np.logical_and(x > 2, np.concatenate((x[1:], [1])) > 1)
-    return 1 - np.sum(y_pred[arabic_letters_pos] == y_true[arabic_letters_pos]) / np.sum(arabic_letters_pos)
+    return np.nan_to_num(
+        1 - np.sum(y_pred[arabic_letters_pos] == y_true[arabic_letters_pos]) / np.sum(arabic_letters_pos)
+    )
 
 
 def wer(x, y_true, y_pred, exclude_syntactic=False):
@@ -251,7 +250,7 @@ def wer(x, y_true, y_pred, exclude_syntactic=False):
     else:
         for t_w, p_w in zip(y_true_words, y_pred_words):
             num_correct += int(np.all(t_w[:-1] == p_w[:-1]))
-    return 1 - num_correct / len(y_true_words)
+    return np.nan_to_num(1 - num_correct / len(y_true_words))
 
 
 def print_progress_bar(current, maximum):
