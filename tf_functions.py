@@ -1,5 +1,6 @@
 import sys
 from pathlib import Path
+from collections import MutableSequence, Counter
 
 import tensorflow as tf
 from tensorflow.keras import Sequential
@@ -12,7 +13,7 @@ from processing import DIACRITICS, NUMBER, NUMBER_PATTERN, SEPARATED_SUFFIXES, S
 
 DATASET_FILE_NAME = 'Tashkeela-processed.zip'
 WINDOW_SIZE = 21
-SLIDING_STEP = WINDOW_SIZE // 2
+SLIDING_STEP = WINDOW_SIZE // 4
 OPTIMIZER = tf.keras.optimizers.RMSprop()
 TF_CHAR_ENCODING = 'UTF8_CHAR'
 MONITOR_VALUE = 'loss'
@@ -155,13 +156,12 @@ def get_model(params_dir):
     return model, last_iteration
 
 
-def get_processed_dataset(file_paths, batch_size):
-    dataset = tf.data.TextLineDataset(file_paths).map(tf_data_processing, tf.data.experimental.AUTOTUNE)\
-        .unbatch().window(WINDOW_SIZE, SLIDING_STEP, drop_remainder=True)\
-        .flat_map(lambda x, y: tf.data.Dataset.zip((x, y))).batch(WINDOW_SIZE, True)\
-        .prefetch(tf.data.experimental.AUTOTUNE).batch(batch_size, True)
+def get_processed_window_dataset(file_paths, batch_size):
+    dataset = tf.data.TextLineDataset(file_paths).map(tf_data_processing, tf.data.experimental.AUTOTUNE)
+    dataset = dataset.unbatch().window(WINDOW_SIZE, SLIDING_STEP, drop_remainder=True)\
+        .flat_map(lambda x, y: tf.data.Dataset.zip((x, y))).batch(WINDOW_SIZE, drop_remainder=True).batch(batch_size)
     size = dataset.reduce(0, lambda old, new: old + 1).numpy()
-    return dataset, size
+    return dataset.prefetch(tf.data.experimental.AUTOTUNE), size
 
 
 def train(data_dir, params_dir, epochs, batch_size, early_stop):
@@ -173,9 +173,10 @@ def train(data_dir, params_dir, epochs, batch_size, early_stop):
     train_file_paths = [str(p.absolute()) for p in data_dir.glob('*train*.txt')]
     val_file_paths = [str(p.absolute()) for p in data_dir.glob('*val*.txt')]
     print('Generating the training set...')
-    train_dataset, train_steps = get_processed_dataset(train_file_paths, batch_size)
+    train_dataset, train_steps = get_processed_window_dataset(train_file_paths, batch_size)
+    model, last_iteration = get_model(params_dir)
     print('Generating the validation set...')
-    val_dataset, val_steps = get_processed_dataset(val_file_paths, batch_size)
+    val_dataset, val_steps = get_processed_window_dataset(val_file_paths, batch_size)
     print('Calculating diacritics weights...')
     labels = tf.data.TextLineDataset(train_file_paths).map(tf_data_processing, tf.data.experimental.AUTOTUNE)\
         .map(lambda x, y: y)
@@ -184,7 +185,6 @@ def train(data_dir, params_dir, epochs, batch_size, early_stop):
         uniques, counts = np.unique(ls, return_counts=True)
         diac_weights[uniques] += counts
     diac_weights = np.max(diac_weights)/diac_weights
-    model, last_iteration = get_model(params_dir)
     model.fit(train_dataset.repeat(), steps_per_epoch=train_steps, epochs=epochs, validation_data=val_dataset.repeat(),
               validation_steps=val_steps, initial_epoch=last_iteration,
               class_weight=dict(enumerate(diac_weights)),
@@ -198,28 +198,93 @@ def train(data_dir, params_dir, epochs, batch_size, early_stop):
               )
 
 
-def test(data_dir, params_dir):
+class MultiPredictionSequence(MutableSequence):
+
+    def __init__(self, window_size, sliding_step):
+        self.data = []
+        self.window_size = window_size
+        self.sliding_step = sliding_step
+        self.offset = 0
+
+    def __getitem__(self, i):
+        if len(self.data[i]) == 1:
+            return self.data[i][0]
+        else:
+            c = Counter(self.data[i])
+            return sorted(c.keys(), key=lambda x: c[x], reverse=True)[0]
+
+    def __setitem__(self, i, o):
+        if i == self.__len__():
+            self.data.append([])
+        self.data[i].append(o)
+
+    def __delitem__(self, i):
+        del self.data[i]
+
+    def __len__(self):
+        return len(self.data)
+
+    def __iter__(self):
+        for i in range(self.__len__()):
+            yield self.__getitem__(i)
+
+    def __repr__(self):
+        return '<{} size={} data={}>'.format(self.__class__.__name__, self.__len__(), [x for x in self.data])
+
+    def __str__(self):
+        return str(list(self.__iter__()))
+
+    def extend(self, iterable):
+        for i, e in enumerate(iterable, self.offset):
+            self.__setitem__(i, e)
+        self.offset += self.sliding_step
+
+    def insert(self, i, o):
+        self.data.insert(i, o)
+
+
+def test(data_dir, params_dir, batch_size):
     assert isinstance(data_dir, Path)
     assert isinstance(params_dir, Path)
+    assert isinstance(batch_size, int)
     test_file_paths = [str(p.absolute()) for p in data_dir.glob('*test*.txt')]
-    test_dataset, test_steps = get_processed_dataset(test_file_paths, 1)
-    test_dataset, test_steps = test_dataset.unbatch(), int(test_steps)
+    test_dataset, test_steps = get_processed_window_dataset(test_file_paths, batch_size)
+    test_steps = int(test_steps)
     model, last_iteration = get_model(params_dir)
+    print('Testing...')
+
+    def test_batch(batch):
+        x_batch, y_batch = batch
+        x_best_sequence = MultiPredictionSequence(WINDOW_SIZE, SLIDING_STEP)
+        y_best_sequence = MultiPredictionSequence(WINDOW_SIZE, SLIDING_STEP)
+        p_best_sequence = MultiPredictionSequence(WINDOW_SIZE, SLIDING_STEP)
+        for x, y in zip(x_batch, y_batch):
+            x = x.numpy()
+            y = y.numpy()
+            y_pred = np.argmax(model.predict(np.reshape(x, (1, -1)))[0], axis=-1)
+            x_best_sequence.extend(x)
+            y_best_sequence.extend(y)
+            p_best_sequence.extend(y_pred)
+        x_best_sequence = np.array(x_best_sequence)
+        y_best_sequence = np.array(y_best_sequence)
+        p_best_sequence = np.array(p_best_sequence)
+        der1 = der(x_best_sequence, y_best_sequence, p_best_sequence)
+        wer1 = wer(x_best_sequence, y_best_sequence, p_best_sequence)
+        der2 = der(x_best_sequence, y_best_sequence, p_best_sequence, True)
+        wer2 = wer(x_best_sequence, y_best_sequence, p_best_sequence, True)
+        return der1, wer1, der2, wer2
+
     cumulative_der1 = 0
     cumulative_wer1 = 0
     cumulative_der2 = 0
     cumulative_wer2 = 0
     s = 0
-    print('Testing...')
-    for x, y in test_dataset:
-        x = x.numpy()
-        y = y.numpy()
-        y_pred = np.argmax(model.predict(x.reshape((1,)+x.shape))[0], axis=-1)
-        cumulative_der1 += der(x, y, y_pred)
-        cumulative_wer1 += wer(x, y, y_pred)
-        cumulative_der2 += der(x, y, y_pred, True)
-        cumulative_wer2 += wer(x, y, y_pred, True)
+    for der1, wer1, der2, wer2 in map(test_batch, test_dataset):
         s += 1
+        cumulative_der1 += der1
+        cumulative_wer1 += wer1
+        cumulative_der2 += der2
+        cumulative_wer2 += wer2
         print_progress_bar(s, test_steps)
     print('\nDER1 = {:.2%} | DER2 = {:.2%} | WER1 = {:.2%} | WER2 = {:.2%}'.format(
         cumulative_der1/s, cumulative_der2/s, cumulative_wer1/s, cumulative_wer2/s
