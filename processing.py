@@ -23,8 +23,9 @@ ARABIC_LETTERS = frozenset([chr(x) for x in (list(range(0x0621, 0x63B)) + list(r
 ARABIC_NUMBER_SPACE_PATTERN = re.compile(
     '((?:[' + ''.join(ARABIC_LETTERS) + '][' + ''.join(DIACRITICS) + r']*)+|\d+(?:\.\d+)?|\s+)'
 )
-SENTENCE_SEPARATORS = ';,،؛.:؟!'
-PUNCTUATION = SENTENCE_SEPARATORS + '۩﴿﴾«»ـ' +\
+SENTENCE_SEPARATORS = ';؛.:؟!'
+SENTENCE_TOKENIZATION_REGEXP = re.compile(r'([' + SENTENCE_SEPARATORS + r'])(?!\w)')
+PUNCTUATION = SENTENCE_SEPARATORS + '۩﴿﴾«»ـ,،' +\
               ''.join([chr(x) for x in range(0x0021, 0x0030)]+[chr(x) for x in range(0x003A, 0x0040)] +
                       [chr(x) for x in range(0x005B, 0x0060)]+[chr(x) for x in range(0x007B, 0x007F)])
 PUNCTUATION_PATTERN = re.compile('['+''.join(PUNCTUATION)+']+')

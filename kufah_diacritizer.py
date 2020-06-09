@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 from argparse import ArgumentParser
 from pathlib import Path
-from tf_functions import download_data, train, test
+from tf_functions import download_data, train, test, diacritization
 
 DATA_DIR = Path('data/')
 PARAMS_DIR = Path('params/')
@@ -36,6 +36,10 @@ if __name__ == '__main__':
                              help='Directory containing the model parameters.')
     test_parser.add_argument('--batch-size', '-b', type=int, default=BATCH_SIZE,
                              help='Maximum number of elements in a single batch.')
+    diacritization_parser = subparsers.add_parser('diacritize', help='Diacritize some text.')
+    diacritization_parser.add_argument('--text', default='', help='Undiacritized text.')
+    diacritization_parser.add_argument('--params-dir', '-p', type=Path, default=PARAMS_DIR,
+                                       help='Directory containing the model parameters.')
     args = main_parser.parse_args()
     if args.subcommand == 'download-data':
         download_data(args.data_dir, args.url)
@@ -45,3 +49,5 @@ if __name__ == '__main__':
         print('Trained.')
     elif args.subcommand == 'test':
         test(args.data_dir, args.params_dir, args.batch_size)
+    elif args.subcommand == 'diacritize':
+        diacritization(args.text, args.params_dir)

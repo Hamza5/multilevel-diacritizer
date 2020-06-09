@@ -143,11 +143,11 @@ class TFFunctionsTestCase(unittest.TestCase):
         with tf.device('/CPU:0'):
             for s in sentences:
                 self.assertTrue(tf.reduce_all(
-                    tf.not_equal(LETTERS_TABLE.lookup(tf_separate_diacritics(tf.constant(s))[0]),
+                    tf.not_equal(ENCODE_LETTERS_TABLE.lookup(tf_separate_diacritics(tf.constant(s))[0]),
                                  0)).numpy()
-                )
-        self.assertTrue(tf.reduce_all(tf.not_equal(LETTERS_TABLE.lookup(tf.constant(CHARS)), 0)).numpy())
-        self.assertTrue(tf.reduce_all(tf.not_equal(DIACRITICS_TABLE.lookup(tf.constant(DIACS)), 0)).numpy())
+                                )
+        self.assertTrue(tf.reduce_all(tf.not_equal(ENCODE_LETTERS_TABLE.lookup(tf.constant(CHARS)), 0)).numpy())
+        self.assertTrue(tf.reduce_all(tf.not_equal(ENCODE_DIACRITICS_TABLE.lookup(tf.constant(DIACS)), 0)).numpy())
 
     def test_separate_affixes(self):
         words_partitions = {

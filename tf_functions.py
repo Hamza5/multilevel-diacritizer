@@ -9,7 +9,7 @@ from tensorflow.keras.layers import Embedding, LSTM, Dense, TimeDistributed, Bid
 import numpy as np
 
 from processing import DIACRITICS, NUMBER, NUMBER_PATTERN, SEPARATED_SUFFIXES, SEPARATED_PREFIXES, MIN_STEM_LEN, \
-    HAMZAT_PATTERN, ORDINARY_ARABIC_LETTERS_PATTERN, ARABIC_LETTERS
+    HAMZAT_PATTERN, ORDINARY_ARABIC_LETTERS_PATTERN, ARABIC_LETTERS, clear_diacritics, SENTENCE_TOKENIZATION_REGEXP
 
 DATASET_FILE_NAME = 'Tashkeela-processed.zip'
 WINDOW_SIZE = 21
@@ -103,17 +103,28 @@ def tf_normalize_entities(text: tf.string):
 
 CHARS = sorted(ARABIC_LETTERS.union({NUMBER, ' '}))
 DIACS = sorted(DIACRITICS.difference({'ّ'}).union({''}).union('ّ'+x for x in DIACRITICS.difference({'ّ', 'ْ'})))
-LETTERS_TABLE = tf.lookup.StaticHashTable(
+ENCODE_LETTERS_TABLE = tf.lookup.StaticHashTable(
         tf.lookup.KeyValueTensorInitializer(tf.constant(CHARS), tf.range(1, len(CHARS)+1)), 0
 )
-DIACRITICS_TABLE = tf.lookup.StaticHashTable(
+ENCODE_DIACRITICS_TABLE = tf.lookup.StaticHashTable(
         tf.lookup.KeyValueTensorInitializer(tf.constant(DIACS), tf.range(1, len(DIACS)+1)), 0
+)
+DECODE_LETTERS_TABLE = tf.lookup.StaticHashTable(
+        tf.lookup.KeyValueTensorInitializer(tf.range(1, len(CHARS)+1), tf.constant(CHARS)), ''
+)
+DECODE_DIACRITICS_TABLE = tf.lookup.StaticHashTable(
+        tf.lookup.KeyValueTensorInitializer(tf.range(1, len(DIACS)+1), tf.constant(DIACS)), ''
 )
 
 
 @tf.function
 def tf_encode(letters: tf.string, diacritics: tf.string):
-    return LETTERS_TABLE.lookup(letters), DIACRITICS_TABLE.lookup(diacritics)
+    return ENCODE_LETTERS_TABLE.lookup(letters), ENCODE_DIACRITICS_TABLE.lookup(diacritics)
+
+
+@tf.function
+def tf_decode(letters_codes: tf.string, diacritics_codes: tf.string):
+    return DECODE_LETTERS_TABLE.lookup(letters_codes), DECODE_DIACRITICS_TABLE.lookup(diacritics_codes)
 
 
 @tf.function
@@ -126,7 +137,8 @@ def tf_data_processing(text: tf.string):
 
 @tf.function
 def no_padding_accuracy(y_true, y_pred):
-    return tf.reduce_mean(tf.cast(tf.equal(y_true, tf.cast(tf.argmax(y_pred, axis=-1), tf.float32))[tf.greater(y_true, 0)], tf.float32))
+    return tf.reduce_mean(tf.cast(tf.equal(y_true, tf.cast(tf.argmax(y_pred, axis=-1),
+                                                           tf.float32))[tf.greater(y_true, 0)], tf.float32))
 
 
 def download_data(data_dir, download_url):
@@ -143,10 +155,10 @@ def get_model(params_dir):
     model = Sequential([
         Embedding(len(CHARS)+1, 128, input_length=WINDOW_SIZE),
         Bidirectional(LSTM(128, return_sequences=True, dropout=0.1)),
-        Bidirectional(LSTM(64, return_sequences=True, dropout=0.1)),
-        TimeDistributed(Dense(len(DIACS)+1))
-    ], name='E128-BLSTM128-BLSTM64-w{}s{}'.format(WINDOW_SIZE, SLIDING_STEP))
-    model.compile(OPTIMIZER, tf.keras.losses.SparseCategoricalCrossentropy(True), [no_padding_accuracy])
+        Bidirectional(LSTM(128, return_sequences=True, dropout=0.1)),
+        TimeDistributed(Dense(len(DIACS)+1, activation='softmax'))
+    ], name='E128-BLSTM128-BLSTM128-w{}s{}'.format(WINDOW_SIZE, SLIDING_STEP))
+    model.compile(OPTIMIZER, tf.keras.losses.SparseCategoricalCrossentropy(), [no_padding_accuracy])
     last_iteration = 0
     weight_files = sorted([x.name for x in params_dir.glob(model.name + '-*.h5')])
     if len(weight_files) > 0:
@@ -325,3 +337,48 @@ def print_progress_bar(current, maximum):
                                                           current / maximum)
     sys.stdout.write('\r' + progress_text)
     sys.stdout.flush()
+
+
+def diacritization(u_text, params_dir):
+    assert isinstance(u_text, str)
+    assert isinstance(params_dir, Path)
+    model, last_iteration = get_model(params_dir)
+    if not u_text:
+        print('Type your sentences:')
+        while True:
+            entered_text = input('>>> ')
+            if entered_text:
+                u_text += entered_text + '\n'
+            else:
+                break
+    sentences = get_sentences(u_text)
+    for sentence in sentences:
+        x = tf.pad(
+            tf_encode(*tf_separate_diacritics(tf_normalize_entities(tf.constant(sentence))))[0], [[0, SLIDING_STEP - 1]]
+        ).numpy()
+        p_best = MultiPredictionSequence(WINDOW_SIZE, SLIDING_STEP)
+        i = 0
+        x_slice = x[i:i+WINDOW_SIZE]
+        while len(x_slice) == WINDOW_SIZE:
+            p_best.extend(np.argmax(model.predict(np.reshape(x_slice, (1, -1)))[0], axis=-1))
+            i += SLIDING_STEP
+            x_slice = x[i:i+WINDOW_SIZE]
+        p_best = np.array(p_best)
+        length = np.sum(x > 0)
+        x = tf.constant(x[:length], dtype=tf.int32)
+        p_best = tf.constant(p_best[:length], dtype=tf.int32)
+        diacritized = tf.strings.reduce_join(tf_merge_diacritics(*tf_decode(x, p_best))).numpy().decode(encoding='UTF-8')
+        start_index = 0
+        for d_word in diacritized.split(' '):
+            u_text = u_text[:start_index] + u_text[start_index:].replace(clear_diacritics(d_word), d_word, 1)
+            start_index = max(u_text.find(d_word) + len(d_word), start_index + len(d_word))
+    print(u_text)
+
+
+def get_sentences(text):
+    assert isinstance(text, str)
+    sentences = []
+    for line in text.splitlines():
+        sentences.extend(x for x in SENTENCE_TOKENIZATION_REGEXP.split(line)
+                         if not SENTENCE_TOKENIZATION_REGEXP.match(x))
+    return sentences
