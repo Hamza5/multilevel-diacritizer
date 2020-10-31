@@ -16,7 +16,11 @@ SEPARATED_SUFFIXES.update({'ت' + x for x in {'ه', 'ك', 'ين', 'ان', 'كم'
 MIN_STEM_LEN = 2
 ORDINARY_ARABIC_LETTERS_PATTERN = re.compile(r'[بتثجحخدذرزسشصضطظعغفقكلمنه]')
 HAMZAT_PATTERN = re.compile(r'[ءأآؤئ]')
-DIACRITICS = set(chr(code) for code in range(0x064B, 0x0653))
+PRIMARY_DIACRITICS = sorted('َُِ')
+SECONDARY_DIACRITICS = sorted('ًٌٍ')
+SHADDA = 'ّ'
+SUKOON = 'ْ'
+DIACRITICS = frozenset(PRIMARY_DIACRITICS + SECONDARY_DIACRITICS + [SHADDA, SUKOON])
 DIACRITICS_PATTERN = re.compile('['+''.join(DIACRITICS)+']')
 NUMBER_PATTERN = re.compile(r'\d+(?:\.\d+)?')
 ARABIC_LETTERS = frozenset([chr(x) for x in (list(range(0x0621, 0x63B)) + list(range(0x0641, 0x064B)))])
