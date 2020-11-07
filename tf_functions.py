@@ -79,90 +79,20 @@ def tf_convert_to_pattern(d_text: tf.string):
 
 
 @tf.function
-def tf_separate_diacritics(d_text: tf.string):
-    letter_diacritic = tf.strings.split(
-        tf.strings.regex_replace(d_text, r'(.[' + ''.join(DIACRITICS) + ']*)', r'\1&'), '&'
-    )
-    decoded = tf.strings.unicode_decode(letter_diacritic, 'UTF-8')
-    letters, diacritics = decoded[:-1, :1], decoded[:-1, 1:]
-    return [tf.strings.unicode_encode(x, 'UTF-8') for x in (letters, diacritics)]
-
-
-@tf.function
 def tf_merge_diacritics(letters: tf.string, diacritics: tf.string):
     merged_letters_diacritics = tf.strings.reduce_join((letters, diacritics), 0)
     return tf.strings.reduce_join(merged_letters_diacritics, 0)
 
 
-@tf.function
-def tf_normalize_entities(text: tf.string):
-    return tf.strings.strip(tf.strings.regex_replace(tf.strings.regex_replace(tf.strings.regex_replace(
-        tf.strings.regex_replace(text, NUMBER_PATTERN.pattern, NUMBER),
-        r'([^\p{Arabic}\p{P}\d\s'+''.join(DIACRITICS)+'])+', ''),
-        r'\p{P}+', ''), r'\s{2,}', ' '))
 
-
-CHARS = sorted(ARABIC_LETTERS.union({NUMBER, ' '}))
 DIACS = sorted(DIACRITICS.difference({SHADDA}).union(SHADDA+x for x in DIACRITICS.difference({SHADDA, SUKOON})))
-ENCODE_LETTERS_TABLE = tf.lookup.StaticHashTable(
-        tf.lookup.KeyValueTensorInitializer(tf.constant(CHARS), tf.range(1, len(CHARS)+1)), 0
-)
+
 ENCODE_DIACRITICS_TABLE = tf.lookup.StaticHashTable(
         tf.lookup.KeyValueTensorInitializer(tf.constant(DIACS), tf.range(1, len(DIACS)+1)), 0
-)
-DECODE_LETTERS_TABLE = tf.lookup.StaticHashTable(
-        tf.lookup.KeyValueTensorInitializer(tf.range(1, len(CHARS)+1), tf.constant(CHARS)), ''
 )
 DECODE_DIACRITICS_TABLE = tf.lookup.StaticHashTable(
         tf.lookup.KeyValueTensorInitializer(tf.range(1, len(DIACS)+1), tf.constant(DIACS)), ''
 )
-ENCODE_BINARY_TABLE = tf.lookup.StaticHashTable(
-    tf.lookup.KeyValueTensorInitializer(tf.constant(['']), tf.constant([0])), 1
-)
-ENCODE_PRIMARY_TABLE = tf.lookup.StaticHashTable(
-    tf.lookup.KeyValueTensorInitializer(tf.constant(PRIMARY_DIACRITICS), tf.range(1, len(PRIMARY_DIACRITICS)+1)), 0
-)
-ENCODE_SECONDARY_TABLE = tf.lookup.StaticHashTable(
-    tf.lookup.KeyValueTensorInitializer(tf.constant(SECONDARY_DIACRITICS), tf.range(1, len(SECONDARY_DIACRITICS)+1)), 0
-)
-DECODE_SHADDA_TABLE = tf.lookup.StaticHashTable(
-    tf.lookup.KeyValueTensorInitializer(tf.constant([0]), tf.constant([''])), SHADDA
-)
-DECODE_SUKOON_TABLE = tf.lookup.StaticHashTable(
-    tf.lookup.KeyValueTensorInitializer(tf.constant([0]), tf.constant([''])), SUKOON
-)
-DECODE_PRIMARY_TABLE = tf.lookup.StaticHashTable(
-    tf.lookup.KeyValueTensorInitializer(tf.range(1, 4), tf.constant(PRIMARY_DIACRITICS)), ''
-)
-DECODE_SECONDARY_TABLE = tf.lookup.StaticHashTable(
-    tf.lookup.KeyValueTensorInitializer(tf.range(1, 4), tf.constant(SECONDARY_DIACRITICS)), ''
-)
-
-
-def tf_filter_diacritics(diacritics_sequence, filtered_diacritics):
-    filtered_diacritics = tf.reshape(filtered_diacritics, (-1, 1))
-    diacritics_positions = tf.reduce_any(diacritics_sequence == filtered_diacritics, axis=0)
-    return tf.where(diacritics_positions, diacritics_sequence, '')
-
-
-@tf.function
-def tf_data_processing(text):
-    text = tf_normalize_entities(text)
-    letters, diacritics = tf_separate_diacritics(text)
-    padding = [[0, 1]]
-    letters, diacritics = tf.pad(letters, padding), tf.pad(diacritics, padding)
-    shadda_diacritics = tf_filter_diacritics(diacritics, [SHADDA])
-    sukoon_diacritics = tf_filter_diacritics(diacritics, [SUKOON])
-    primary_diacritics = tf_filter_diacritics(diacritics, PRIMARY_DIACRITICS)
-    secondary_diacritics = tf_filter_diacritics(diacritics, SECONDARY_DIACRITICS)
-    encoded_letters = ENCODE_LETTERS_TABLE.lookup(letters)
-    encoded_shadda_diacritics = ENCODE_BINARY_TABLE.lookup(shadda_diacritics)
-    encoded_sukoon_diacritics = ENCODE_BINARY_TABLE.lookup(sukoon_diacritics)
-    encoded_primary_diacritics = ENCODE_PRIMARY_TABLE.lookup(primary_diacritics)
-    encoded_secondary_diacritics = ENCODE_SECONDARY_TABLE.lookup(secondary_diacritics)
-    return (encoded_letters,
-            (encoded_primary_diacritics, encoded_secondary_diacritics, encoded_shadda_diacritics,
-             encoded_sukoon_diacritics))
 
 
 @tf.function
@@ -178,54 +108,6 @@ def download_data(data_dir, download_url):
     dataset_file_path = data_dir.joinpath(DATASET_FILE_NAME)
     tf.keras.utils.get_file(str(dataset_file_path.absolute()), download_url, cache_dir=str(data_dir.absolute()),
                             cache_subdir=str(data_dir.absolute()), extract=True)
-
-
-def get_model(params_dir):
-    assert isinstance(params_dir, Path)
-    model = Sequential([
-        Embedding(len(CHARS)+1, 128, input_length=WINDOW_SIZE),
-        Bidirectional(LSTM(128, return_sequences=True, dropout=0.1)),
-        Bidirectional(LSTM(128, return_sequences=True, dropout=0.1)),
-        TimeDistributed(Dense(len(DIACS)+1, activation='softmax'))
-    ], name='E128-BLSTM128-BLSTM128-w{}s{}'.format(WINDOW_SIZE, SLIDING_STEP))
-    model.compile(OPTIMIZER, tf.keras.losses.SparseCategoricalCrossentropy(), [no_padding_accuracy])
-    last_iteration = 0
-    weight_files = sorted([x.name for x in params_dir.glob(model.name + '-*.h5')])
-    if len(weight_files) > 0:
-        last_weights_file = str(params_dir.joinpath(weight_files[-1]).absolute())
-        last_iteration = int(last_weights_file.split('-')[-1].split('.')[0])
-        model.load_weights(last_weights_file)
-    return model, last_iteration
-
-
-def get_processed_window_dataset(file_paths, batch_size, window_size=WINDOW_SIZE, sliding_step=SLIDING_STEP):
-    dataset = tf.data.TextLineDataset(file_paths).map(tf_data_processing, tf.data.experimental.AUTOTUNE)
-    zip_data = lambda x, y: tf.data.Dataset.zip((x, y))
-    dataset = dataset.unbatch().window(window_size, sliding_step, drop_remainder=True)\
-        .flat_map(zip_data).batch(window_size, drop_remainder=True).batch(batch_size)
-
-    def count_diacritics(diacritics_count, new_element):
-        _, (primary_diacritics, secondary_diacritics, shadda_diacritics, sukoon_diacritics) = new_element
-        primary_count, secondary_count, shadda_count, sukoon_count = diacritics_count
-        primary_count += tf.reduce_sum(tf.cast(
-            tf.reshape(tf.range(4), (1, -1)) == tf.reshape(primary_diacritics, (-1, 1)), tf.int32),
-            axis=0)
-        secondary_count += tf.reduce_sum(
-            tf.cast(tf.reshape(tf.range(4), (1, -1)) == tf.reshape(secondary_diacritics, (-1, 1)), tf.int32),
-            axis=0)
-        shadda_count += tf.reduce_sum(
-            tf.cast(tf.reshape(tf.range(2), (1, -1)) == tf.reshape(shadda_diacritics, (-1, 1)), tf.int32),
-            axis=0)
-        sukoon_count += tf.reduce_sum(
-            tf.cast(tf.reshape(tf.range(2), (1, -1)) == tf.reshape(sukoon_diacritics, (-1, 1)), tf.int32),
-            axis=0)
-        return primary_count, secondary_count, shadda_count, sukoon_count
-
-    diacritics_count = dataset.reduce((tf.zeros(4, tf.int32), tf.zeros(4, tf.int32), tf.zeros(1, tf.int32),
-                                       tf.zeros(1, tf.int32)), count_diacritics)
-    diacritics_count = [x.numpy() for x in diacritics_count]
-    size = dataset.reduce(0, lambda old, new: old + 1).numpy()
-    return dataset.prefetch(tf.data.experimental.AUTOTUNE), size, diacritics_count
 
 
 def train(data_dir, params_dir, epochs, batch_size, early_stop):

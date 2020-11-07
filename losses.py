@@ -20,5 +20,5 @@ class WeightedSparseCategoricalCrossEntropy(SparseCategoricalCrossentropy):
         self.weights = tf.convert_to_tensor(class_weights)
 
     def __call__(self, y_true, y_pred, sample_weight=None):
-        sample_weight = tf.gather(self.weights, y_true)
+        sample_weight = tf.gather(self.weights, tf.cast(y_true, tf.int32))
         return super(WeightedSparseCategoricalCrossEntropy, self).__call__(y_true, y_pred, sample_weight)
