@@ -1,48 +1,12 @@
 import tensorflow as tf
-from tensorflow.keras import Model, Input
-from tensorflow.keras.layers import Embedding, LSTM, Dense, Bidirectional
+from keras import Model, Input
+from keras.layers import Embedding, LSTM, Dense, Bidirectional, Concatenate
 
-from processing import (NUMBER, NUMBER_PATTERN, DIACRITICS, PRIMARY_DIACRITICS, SECONDARY_DIACRITICS, SHADDA, SUKOON,
-                        ARABIC_LETTERS)
-from losses import WeightedBinaryCrossEntropy, WeightedSparseCategoricalCrossEntropy
-
-DEFAULT_WINDOW_SIZE = 32
-DEFAULT_SLIDING_STEP = 5
-DEFAULT_EMBEDDING_SIZE = 64
-DEFAULT_LSTM_SIZE = 128
-DEFAULT_DROPOUT_RATE = 0.15
-
-CHARS = sorted(ARABIC_LETTERS.union({NUMBER, ' '}))
-
-ENCODE_LETTERS_TABLE = tf.lookup.StaticHashTable(
-        tf.lookup.KeyValueTensorInitializer(tf.constant(CHARS), tf.range(1, len(CHARS)+1)), 0
-)
-DECODE_LETTERS_TABLE = tf.lookup.StaticHashTable(
-        tf.lookup.KeyValueTensorInitializer(tf.range(1, len(CHARS)+1), tf.constant(CHARS)), ''
-)
-ENCODE_BINARY_TABLE = tf.lookup.StaticHashTable(
-    tf.lookup.KeyValueTensorInitializer(tf.constant(['']), tf.constant([0])), 1
-)
-ENCODE_PRIMARY_TABLE = tf.lookup.StaticHashTable(
-    tf.lookup.KeyValueTensorInitializer(tf.constant(PRIMARY_DIACRITICS + [SHADDA + x for x in PRIMARY_DIACRITICS]),
-                                        tf.tile(tf.range(1, len(PRIMARY_DIACRITICS)+1), [2])), 0
-)
-ENCODE_SECONDARY_TABLE = tf.lookup.StaticHashTable(
-    tf.lookup.KeyValueTensorInitializer(tf.constant(SECONDARY_DIACRITICS + [SHADDA + x for x in SECONDARY_DIACRITICS]),
-                                        tf.tile(tf.range(1, len(SECONDARY_DIACRITICS)+1), [2])), 0
-)
-DECODE_SHADDA_TABLE = tf.lookup.StaticHashTable(
-    tf.lookup.KeyValueTensorInitializer(tf.constant([0]), tf.constant([''])), SHADDA
-)
-DECODE_SUKOON_TABLE = tf.lookup.StaticHashTable(
-    tf.lookup.KeyValueTensorInitializer(tf.constant([0]), tf.constant([''])), SUKOON
-)
-DECODE_PRIMARY_TABLE = tf.lookup.StaticHashTable(
-    tf.lookup.KeyValueTensorInitializer(tf.range(1, 4), tf.constant(PRIMARY_DIACRITICS)), ''
-)
-DECODE_SECONDARY_TABLE = tf.lookup.StaticHashTable(
-    tf.lookup.KeyValueTensorInitializer(tf.range(1, 4), tf.constant(SECONDARY_DIACRITICS)), ''
-)
+from constants import (NUMBER, NUMBER_PATTERN, DIACRITICS, PRIMARY_DIACRITICS, SECONDARY_DIACRITICS, SHADDA, SUKOON,
+                       DEFAULT_WINDOW_SIZE, DEFAULT_SLIDING_STEP, DEFAULT_EMBEDDING_SIZE, DEFAULT_LSTM_SIZE,
+                       DEFAULT_DROPOUT_RATE, CHARS, DECODE_LETTERS_TABLE, DECODE_PRIMARY_TABLE, DECODE_SECONDARY_TABLE,
+                       DECODE_SHADDA_TABLE, DECODE_SUKOON_TABLE, ENCODE_LETTERS_TABLE, ENCODE_PRIMARY_TABLE,
+                       ENCODE_SECONDARY_TABLE, ENCODE_BINARY_TABLE)
 
 
 class MultiLevelDiacritizer(Model):
@@ -70,11 +34,17 @@ class MultiLevelDiacritizer(Model):
                                      name='sukoon_layer')(shadda_layer)
         sukoon_output = Dense(1, name='sukoon_output')(sukoon_layer)
 
+        reshaped_inputs = tf.reshape(inputs, tf.shape(sukoon_output))
+        replicated_inputs = tf.broadcast_to(reshaped_inputs, tf.shape(primary_diacritics_output))
+
         super(MultiLevelDiacritizer, self).__init__(
             inputs=inputs,
-            outputs=[primary_diacritics_output, secondary_diacritics_output, shadda_output, sukoon_output],
-            name=name or self.__class__.__name__,
-            **kwargs
+            outputs=[
+                Concatenate(name='input-primary_diacritics', axis=1)([replicated_inputs, primary_diacritics_output]),
+                Concatenate(name='input-secondary_diacritics', axis=1)([replicated_inputs, secondary_diacritics_output]),
+                Concatenate(name='input-shadda', axis=1)([reshaped_inputs, shadda_output]),
+                Concatenate(name='input-sukoon', axis=1)([reshaped_inputs, sukoon_output]),
+            ], name=name or self.__class__.__name__, **kwargs
         )
 
     @classmethod
@@ -175,11 +145,14 @@ class MultiLevelDiacritizer(Model):
 if __name__ == '__main__':
     import os.path
     import numpy as np
-    from tensorflow.keras.optimizers import RMSprop
-    from tensorflow.keras.callbacks import ModelCheckpoint, TerminateOnNaN
+    from keras.optimizers import RMSprop
+    from keras.callbacks import ModelCheckpoint, TerminateOnNaN
+
+    from losses import BinaryCrossentropyWithInputs, SparseCategoricalCrossentropyWithInputs
+    from metrics import DiacritizationErrorRate, WordErrorRate
 
     model = MultiLevelDiacritizer()
-    model.summary()
+    model.summary(positions=[.45, .6, .75, 1.])
     train_set, train_steps, diacritics_count = MultiLevelDiacritizer.get_processed_window_dataset(
         ['data/ATB3_train.txt'], 1024, DEFAULT_WINDOW_SIZE, DEFAULT_SLIDING_STEP
     )
@@ -188,22 +161,21 @@ if __name__ == '__main__':
     val_set, val_steps, _ = MultiLevelDiacritizer.get_processed_window_dataset(
         ['data/ATB3_val.txt'], 1024, DEFAULT_WINDOW_SIZE, DEFAULT_SLIDING_STEP
     )
-    epochs = 200
 
     model.compile(RMSprop(0.001),
-                  [WeightedSparseCategoricalCrossEntropy(from_logits=True, name='primary_loss',
-                                                         class_weights=diacritics_factors[0]),
-                   WeightedSparseCategoricalCrossEntropy(from_logits=True, name='secondary_loss',
-                                                         class_weights=diacritics_factors[1]),
-                   WeightedBinaryCrossEntropy(from_logits=True, name='shadda_loss',
-                                              class_weights=diacritics_factors[2]),
-                   WeightedBinaryCrossEntropy(from_logits=True, name='sukoon_loss',
-                                              class_weights=diacritics_factors[3])],
-                  ['accuracy']
+                  [SparseCategoricalCrossentropyWithInputs(from_logits=True, name='primary_loss'),
+                   SparseCategoricalCrossentropyWithInputs(from_logits=True, name='secondary_loss'),
+                   BinaryCrossentropyWithInputs(from_logits=True, name='shadda_loss'),
+                   BinaryCrossentropyWithInputs(from_logits=True, name='sukoon_loss'),
+                   ],
+                  [DiacritizationErrorRate(), WordErrorRate()]
                   )
     model_path = f'params/{model.name}.h5'
     if os.path.exists(model_path):
         model.load_weights(model_path)
-    model.fit(train_set.repeat(epochs), steps_per_epoch=train_steps, epochs=epochs,
-              validation_data=val_set.repeat(epochs), validation_steps=val_steps,
-              callbacks=[ModelCheckpoint(model_path, save_best_only=True), TerminateOnNaN()])
+    model.fit(train_set.repeat(), steps_per_epoch=train_steps, epochs=1, initial_epoch=0,
+              # class_weight={output.name.split('/')[0]: dict(enumerate(diacritics_factors[i]))
+              #               for i, output in enumerate(model.outputs)},
+              validation_data=val_set.repeat(), validation_steps=val_steps,
+              callbacks=[ModelCheckpoint(model_path, save_best_only=True), TerminateOnNaN()]
+              )

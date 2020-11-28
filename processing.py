@@ -16,14 +16,9 @@ SEPARATED_SUFFIXES.update({'ت' + x for x in {'ه', 'ك', 'ين', 'ان', 'كم'
 MIN_STEM_LEN = 2
 ORDINARY_ARABIC_LETTERS_PATTERN = re.compile(r'[بتثجحخدذرزسشصضطظعغفقكلمنه]')
 HAMZAT_PATTERN = re.compile(r'[ءأآؤئ]')
-PRIMARY_DIACRITICS = sorted('َُِ')
-SECONDARY_DIACRITICS = sorted('ًٌٍ')
-SHADDA = 'ّ'
-SUKOON = 'ْ'
-DIACRITICS = frozenset(PRIMARY_DIACRITICS + SECONDARY_DIACRITICS + [SHADDA, SUKOON])
+
 DIACRITICS_PATTERN = re.compile('['+''.join(DIACRITICS)+']')
-NUMBER_PATTERN = re.compile(r'\d+(?:\.\d+)?')
-ARABIC_LETTERS = frozenset([chr(x) for x in (list(range(0x0621, 0x63B)) + list(range(0x0641, 0x064B)))])
+
 ARABIC_NUMBER_SPACE_PATTERN = re.compile(
     '((?:[' + ''.join(ARABIC_LETTERS) + '][' + ''.join(DIACRITICS) + r']*)+|\d+(?:\.\d+)?|\s+)'
 )
@@ -33,7 +28,7 @@ PUNCTUATION = SENTENCE_SEPARATORS + '۩﴿﴾«»ـ,،' +\
               ''.join([chr(x) for x in range(0x0021, 0x0030)]+[chr(x) for x in range(0x003A, 0x0040)] +
                       [chr(x) for x in range(0x005B, 0x0060)]+[chr(x) for x in range(0x007B, 0x007F)])
 PUNCTUATION_PATTERN = re.compile('['+''.join(PUNCTUATION)+']+')
-NUMBER = '0'
+
 FOREIGN = '<FOR>'
 UNKNOWN = '<UNK>'
 

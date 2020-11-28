@@ -7,8 +7,7 @@ license = "MIT"
 
 [tool.poetry.dependencies]
 python = ">=3.5,<3.8"
-tensorflow = "<2.2,>=2.0"  # Need to be a version below 2.2, or the loss weighting will not work.
-tensorflow-estimator = "<=2.1.0"  # Needed because the 2.2rc version will break the code.
+tensorflow = "~2.3"
 
 [tool.poetry.dev-dependencies]
 
