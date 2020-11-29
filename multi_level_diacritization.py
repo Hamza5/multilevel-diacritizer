@@ -7,6 +7,7 @@ from constants import (NUMBER, NUMBER_PATTERN, DIACRITICS, PRIMARY_DIACRITICS, S
                        DEFAULT_DROPOUT_RATE, CHARS, DECODE_LETTERS_TABLE, DECODE_PRIMARY_TABLE, DECODE_SECONDARY_TABLE,
                        DECODE_SHADDA_TABLE, DECODE_SUKOON_TABLE, ENCODE_LETTERS_TABLE, ENCODE_PRIMARY_TABLE,
                        ENCODE_SECONDARY_TABLE, ENCODE_BINARY_TABLE)
+from metrics import DiacritizationErrorRate, WordErrorRate
 
 
 class MultiLevelDiacritizer(Model):
@@ -34,18 +35,13 @@ class MultiLevelDiacritizer(Model):
                                      name='sukoon_layer')(shadda_layer)
         sukoon_output = Dense(1, name='sukoon_output')(sukoon_layer)
 
-        reshaped_inputs = tf.reshape(inputs, tf.shape(sukoon_output))
-        replicated_inputs = tf.broadcast_to(reshaped_inputs, tf.shape(primary_diacritics_output))
-
         super(MultiLevelDiacritizer, self).__init__(
             inputs=inputs,
-            outputs=[
-                Concatenate(name='input-primary_diacritics', axis=1)([replicated_inputs, primary_diacritics_output]),
-                Concatenate(name='input-secondary_diacritics', axis=1)([replicated_inputs, secondary_diacritics_output]),
-                Concatenate(name='input-shadda', axis=1)([reshaped_inputs, shadda_output]),
-                Concatenate(name='input-sukoon', axis=1)([reshaped_inputs, sukoon_output]),
-            ], name=name or self.__class__.__name__, **kwargs
+            outputs=[primary_diacritics_output, secondary_diacritics_output, shadda_output, sukoon_output],
+            name=name or self.__class__.__name__, **kwargs
         )
+        self.der = DiacritizationErrorRate()
+        self.wer = WordErrorRate()
 
     @classmethod
     def normalize_entities(cls, text):
@@ -141,15 +137,27 @@ class MultiLevelDiacritizer(Model):
                                             sukoon_diacritics)
         return tf.strings.reduce_join(tf.strings.reduce_join((letters, diacritics), axis=0))
 
+    def test_step(self, data):
+        logs = super(MultiLevelDiacritizer, self).test_step(data)
+        x, y_true = data
+        y_pred = self(x)
+        for i, output in enumerate(self.outputs):
+            self.der.update_state(y_true[i], y_pred[i], x)
+            logs[f"{output.name.split('/')[0]}_{self.der.name}"] = self.der.result()
+            self.der.reset_states()
+            self.wer.update_state(y_true[i], y_pred[i], x)
+            logs[f"{output.name.split('/')[0]}_{self.wer.name}"] = self.wer.result()
+            self.wer.reset_states()
+        return logs
+
 
 if __name__ == '__main__':
     import os.path
     import numpy as np
-    from keras.optimizers import RMSprop
-    from keras.callbacks import ModelCheckpoint, TerminateOnNaN
+    from tensorflow.keras.optimizers import RMSprop
+    from tensorflow.keras.callbacks import ModelCheckpoint, TerminateOnNaN
 
-    from losses import BinaryCrossentropyWithInputs, SparseCategoricalCrossentropyWithInputs
-    from metrics import DiacritizationErrorRate, WordErrorRate
+    from tensorflow.keras.losses import BinaryCrossentropy, SparseCategoricalCrossentropy
 
     model = MultiLevelDiacritizer()
     model.summary(positions=[.45, .6, .75, 1.])
@@ -163,19 +171,19 @@ if __name__ == '__main__':
     )
 
     model.compile(RMSprop(0.001),
-                  [SparseCategoricalCrossentropyWithInputs(from_logits=True, name='primary_loss'),
-                   SparseCategoricalCrossentropyWithInputs(from_logits=True, name='secondary_loss'),
-                   BinaryCrossentropyWithInputs(from_logits=True, name='shadda_loss'),
-                   BinaryCrossentropyWithInputs(from_logits=True, name='sukoon_loss'),
+                  [SparseCategoricalCrossentropy(from_logits=True, name='primary_loss'),
+                   SparseCategoricalCrossentropy(from_logits=True, name='secondary_loss'),
+                   BinaryCrossentropy(from_logits=True, name='shadda_loss'),
+                   BinaryCrossentropy(from_logits=True, name='sukoon_loss'),
                    ],
-                  [DiacritizationErrorRate(), WordErrorRate()]
                   )
     model_path = f'params/{model.name}.h5'
     if os.path.exists(model_path):
-        model.load_weights(model_path)
+        model.load_weights(model_path, by_name=True, skip_mismatch=True)
     model.fit(train_set.repeat(), steps_per_epoch=train_steps, epochs=1, initial_epoch=0,
               # class_weight={output.name.split('/')[0]: dict(enumerate(diacritics_factors[i]))
               #               for i, output in enumerate(model.outputs)},
               validation_data=val_set.repeat(), validation_steps=val_steps,
-              callbacks=[ModelCheckpoint(model_path, save_best_only=True), TerminateOnNaN()]
+              callbacks=[ModelCheckpoint(model_path, save_best_only=True, save_weights_only=True, monitor='loss'),
+                         TerminateOnNaN()]
               )

@@ -8,12 +8,11 @@ class ErrorRate(tf.keras.metrics.Metric):
     def __init__(self, function, name=None, **kwargs):
         super(ErrorRate, self).__init__(name=name, **kwargs)
         self.function = function
-        self.value_sum = self.add_weight(f'{name or __class__.__name__}_sum')
-        self.count = self.add_weight('count')
+        self.value_sum = self.add_weight(f'{name or __class__.__name__}_sum', initializer=tf.zeros_initializer())
+        self.count = self.add_weight('count', initializer=tf.zeros_initializer())
 
-    def update_state(self, y_true, y_pred, *args, **kwargs):
-        x = y_pred[:, :tf.shape(y_true)[1], 0]
-        y_pred = tf.argmax(y_pred[:, tf.shape(y_true)[1]:], axis=-1)
+    def update_state(self, y_true, y_pred, x):
+        y_pred = tf.argmax(y_pred, axis=2)
         y_true, y_pred, x = tf.cast(y_true, tf.int32), tf.cast(y_pred, tf.int32), tf.cast(x, tf.int32)
         batch_value = tf.map_fn(self.function, (y_true, y_pred, x), fn_output_signature=tf.float32)
         self.value_sum.assign_add(tf.reduce_mean(batch_value))
