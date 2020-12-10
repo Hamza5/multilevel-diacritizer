@@ -26,7 +26,7 @@ ENCODE_LETTERS_TABLE = tf.lookup.StaticHashTable(
         tf.lookup.KeyValueTensorInitializer(tf.constant(CHARS), tf.range(1, len(CHARS)+1)), 0
 )
 DECODE_LETTERS_TABLE = tf.lookup.StaticHashTable(
-        tf.lookup.KeyValueTensorInitializer(tf.range(1, len(CHARS)+1), tf.constant(CHARS)), ''
+        tf.lookup.KeyValueTensorInitializer(tf.range(1, len(CHARS)+1), tf.constant(CHARS)), '|'
 )
 ENCODE_BINARY_TABLE = tf.lookup.StaticHashTable(
     tf.lookup.KeyValueTensorInitializer(tf.constant(['']), tf.constant([0])), 1

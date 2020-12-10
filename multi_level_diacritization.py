@@ -1,6 +1,6 @@
 import tensorflow as tf
 from keras import Model, Input
-from keras.layers import Embedding, LSTM, Dense, Bidirectional, Concatenate
+from keras.layers import Embedding, LSTM, Dense, Bidirectional
 
 from constants import (NUMBER, NUMBER_PATTERN, DIACRITICS, PRIMARY_DIACRITICS, SECONDARY_DIACRITICS, SHADDA, SUKOON,
                        DEFAULT_WINDOW_SIZE, DEFAULT_SLIDING_STEP, DEFAULT_EMBEDDING_SIZE, DEFAULT_LSTM_SIZE,
@@ -13,7 +13,7 @@ from metrics import DiacritizationErrorRate, WordErrorRate
 class MultiLevelDiacritizer(Model):
 
     def __init__(self, window_size=DEFAULT_WINDOW_SIZE, lstm_size=DEFAULT_LSTM_SIZE, dropout_rate=DEFAULT_DROPOUT_RATE,
-                 embedding_size=DEFAULT_EMBEDDING_SIZE, name=None, **kwargs):
+                 embedding_size=DEFAULT_EMBEDDING_SIZE, name=None, test_der=True, test_wer=True, **kwargs):
         inputs = Input(shape=(window_size,), name='input')
         embedding = Embedding(len(CHARS) + 1, embedding_size, name='embedding')(inputs)
 
@@ -40,18 +40,19 @@ class MultiLevelDiacritizer(Model):
             outputs=[primary_diacritics_output, secondary_diacritics_output, shadda_output, sukoon_output],
             name=name or self.__class__.__name__, **kwargs
         )
-        self.der = DiacritizationErrorRate()
-        self.wer = WordErrorRate()
 
-    @classmethod
-    def normalize_entities(cls, text):
+        self.der = DiacritizationErrorRate() if test_der else None
+        self.wer = WordErrorRate() if test_wer else None
+
+    @staticmethod
+    def normalize_entities(text):
         return tf.strings.strip(tf.strings.regex_replace(tf.strings.regex_replace(tf.strings.regex_replace(
             tf.strings.regex_replace(text, NUMBER_PATTERN.pattern, NUMBER),
             r'([^\p{Arabic}\p{P}\d\s' + ''.join(DIACRITICS) + '])+', ''),
             r'\p{P}+', ''), r'\s{2,}', ' '))
 
-    @classmethod
-    def separate_diacritics(cls, diacritized_text):
+    @staticmethod
+    def separate_diacritics(diacritized_text):
         letter_diacritic = tf.strings.split(
             tf.strings.regex_replace(diacritized_text, r'(.[' + ''.join(DIACRITICS) + ']*)', r'\1&'), '&'
         )
@@ -59,8 +60,8 @@ class MultiLevelDiacritizer(Model):
         letters, diacritics = decoded[:-1, :1], decoded[:-1, 1:]
         return [tf.strings.unicode_encode(x, 'UTF-8') for x in (letters, diacritics)]
 
-    @classmethod
-    def filter_diacritics(cls, diacritics_sequence, filtered_diacritics):
+    @staticmethod
+    def filter_diacritics(diacritics_sequence, filtered_diacritics):
         filtered_diacritics = tf.reshape(filtered_diacritics, (-1, 1))
         diacritics_positions = tf.reduce_any(diacritics_sequence == filtered_diacritics, axis=0)
         return tf.where(diacritics_positions, diacritics_sequence, '')
@@ -118,11 +119,30 @@ class MultiLevelDiacritizer(Model):
         size = dataset.reduce(0, lambda old, new: old + 1).numpy()
         return dataset.prefetch(tf.data.experimental.AUTOTUNE), size, diacritics_count
 
-    @classmethod
-    def combine_diacritics(cls, primary_diacritics, secondary_diacritics, shadda_diacritics, sukoon_diacritics):
+    @staticmethod
+    def combine_diacritics(primary_diacritics, secondary_diacritics, shadda_diacritics, sukoon_diacritics):
         main_diacritics = tf.where(primary_diacritics != '', primary_diacritics,
                                    tf.where(secondary_diacritics != '', secondary_diacritics, sukoon_diacritics))
         return tf.strings.reduce_join((shadda_diacritics, main_diacritics), axis=0)
+
+    @staticmethod
+    def combine_windows(batch, sliding_step):
+        batch_size, window_size = tf.shape(batch)[0], tf.shape(batch)[1]
+
+        def pad(instance__window_number):
+            instance, window_number = instance__window_number
+            offset = window_number * sliding_step
+            back_offset = (batch_size - 1 - window_number) * sliding_step
+            return tf.pad(instance, [[offset, back_offset]], constant_values=-1)
+
+        padded_windows = tf.map_fn(pad, (batch, tf.range(batch_size)), fn_output_signature=tf.int32)
+
+        def most_probable_valid_choice(indexes_column):
+            uniques, _, counts = tf.unique_with_counts(indexes_column)
+            counts = tf.where(uniques < 0, uniques, counts)
+            return uniques[tf.argmax(counts)]
+
+        return tf.transpose(tf.map_fn(most_probable_valid_choice, tf.transpose(padded_windows)))
 
     @classmethod
     def decode_encoded_sentence(cls, encoded_letters, encoded_diacritics):
@@ -142,24 +162,34 @@ class MultiLevelDiacritizer(Model):
         x, y_true = data
         y_pred = self(x)
         for i, output in enumerate(self.outputs):
-            self.der.update_state(y_true[i], y_pred[i], x)
-            logs[f"{output.name.split('/')[0]}_{self.der.name}"] = self.der.result()
-            self.der.reset_states()
-            self.wer.update_state(y_true[i], y_pred[i], x)
-            logs[f"{output.name.split('/')[0]}_{self.wer.name}"] = self.wer.result()
-            self.wer.reset_states()
+            if self.der:
+                self.der.update_state(y_true[i], y_pred[i], x)
+                logs[f"{output.name.split('/')[0]}_{self.der.name}"] = self.der.result()
+                self.der.reset_states()
+            if self.wer:
+                self.wer.update_state(y_true[i], y_pred[i], x)
+                logs[f"{output.name.split('/')[0]}_{self.wer.name}"] = self.wer.result()
+                self.wer.reset_states()
         return logs
+
+    def generate_sentence_from_batch(self, input_batch, sliding_step):
+        pri_pred, sec_pred, sh_pred, su_pred = self(input_batch)
+        in_letters = self.combine_windows(input_batch, sliding_step)
+        pri_pred = self.combine_windows(tf.argmax(pri_pred, axis=2, output_type=tf.int32), sliding_step)
+        sec_pred = self.combine_windows(tf.argmax(sec_pred, axis=2, output_type=tf.int32), sliding_step)
+        sh_pred = self.combine_windows(tf.cast(tf.sigmoid(sh_pred) >= 0.5, tf.int32)[:, :, 0], sliding_step)
+        su_pred = self.combine_windows(tf.cast(tf.sigmoid(su_pred) >= 0.5, tf.int32)[:, :, 0], sliding_step)
+        return self.decode_encoded_sentence(in_letters, (pri_pred, sec_pred, sh_pred, su_pred))
 
 
 if __name__ == '__main__':
     import os.path
     import numpy as np
     from tensorflow.keras.optimizers import RMSprop
-    from tensorflow.keras.callbacks import ModelCheckpoint, TerminateOnNaN
-
+    from tensorflow.keras.callbacks import ModelCheckpoint, TerminateOnNaN, LambdaCallback
     from tensorflow.keras.losses import BinaryCrossentropy, SparseCategoricalCrossentropy
 
-    model = MultiLevelDiacritizer()
+    model = MultiLevelDiacritizer(test_der=False, test_wer=False)
     model.summary(positions=[.45, .6, .75, 1.])
     train_set, train_steps, diacritics_count = MultiLevelDiacritizer.get_processed_window_dataset(
         ['data/ATB3_train.txt'], 1024, DEFAULT_WINDOW_SIZE, DEFAULT_SLIDING_STEP
@@ -185,5 +215,11 @@ if __name__ == '__main__':
               #               for i, output in enumerate(model.outputs)},
               validation_data=val_set.repeat(), validation_steps=val_steps,
               callbacks=[ModelCheckpoint(model_path, save_best_only=True, save_weights_only=True, monitor='loss'),
-                         TerminateOnNaN()]
+                         TerminateOnNaN(),
+                         LambdaCallback(
+                             on_epoch_end=lambda epoch, logs: print(
+                                 model.generate_sentence_from_batch(next(iter(val_set.shuffle(10).take(1)))[0],
+                                                                    DEFAULT_SLIDING_STEP).numpy().decode('UTF-8')
+                             )
+                         )]
               )
