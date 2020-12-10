@@ -56,7 +56,10 @@ class WordErrorRate(ErrorRate):
                 last_was_letter = tf.logical_and(last_was_letter, False)
             return last_was_letter, comparison, words_count, correct_count
 
-        _, _, words_count, correct_count = tf.foldl(count_correct_words, y_true__y_pred__x, initial)
+        last_was_letter, comparison, words_count, correct_count = tf.foldl(count_correct_words, y_true__y_pred__x, initial)
+        if last_was_letter:
+            correct_count = correct_count + tf.cast(comparison, tf.float32)
+            words_count = words_count + 1.0
         return correct_count / words_count
 
     def __init__(self, name='WER', **kwargs):
