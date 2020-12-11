@@ -92,6 +92,10 @@ class MultiLevelDiacritizer(Model):
     @classmethod
     def get_processed_window_dataset(cls, file_paths, batch_size, window_size, sliding_step):
         dataset = tf.data.TextLineDataset(file_paths).map(cls.clean_and_encode_sentence, tf.data.experimental.AUTOTUNE)
+        dataset = dataset.concatenate(tf.data.Dataset.from_tensor_slices((
+            tf.zeros((1, sliding_step), tf.int32),
+            tuple(tf.zeros((1, sliding_step), tf.int32) for _ in range(4))
+        )))
         zip_data = lambda x, y: tf.data.Dataset.zip((x, y))
         dataset = dataset.unbatch().window(window_size, sliding_step, drop_remainder=True) \
             .flat_map(zip_data).batch(window_size, drop_remainder=True).batch(batch_size)
@@ -117,7 +121,8 @@ class MultiLevelDiacritizer(Model):
                                            tf.zeros(1, tf.int32)), count_diacritics)
         diacritics_count = [x.numpy() for x in diacritics_count]
         size = dataset.reduce(0, lambda old, new: old + 1).numpy()
-        return dataset.prefetch(tf.data.experimental.AUTOTUNE), size, diacritics_count
+        return {'dataset': dataset.prefetch(tf.data.experimental.AUTOTUNE), 'size': size,
+                'diacritics_count': diacritics_count}
 
     @staticmethod
     def combine_diacritics(primary_diacritics, secondary_diacritics, shadda_diacritics, sukoon_diacritics):
@@ -184,6 +189,7 @@ class MultiLevelDiacritizer(Model):
 
 if __name__ == '__main__':
     import os.path
+    from random import randint
     import numpy as np
     from tensorflow.keras.optimizers import RMSprop
     from tensorflow.keras.callbacks import ModelCheckpoint, TerminateOnNaN, LambdaCallback
@@ -191,12 +197,12 @@ if __name__ == '__main__':
 
     model = MultiLevelDiacritizer(test_der=False, test_wer=False)
     model.summary(positions=[.45, .6, .75, 1.])
-    train_set, train_steps, diacritics_count = MultiLevelDiacritizer.get_processed_window_dataset(
+    train_set = MultiLevelDiacritizer.get_processed_window_dataset(
         ['data/ATB3_train.txt'], 1024, DEFAULT_WINDOW_SIZE, DEFAULT_SLIDING_STEP
     )
-    diacritics_factors = [np.max(x) / x for x in diacritics_count]
+    diacritics_factors = [np.max(x) / x for x in train_set['diacritics_count']]
     diacritics_factors = [x / np.sum(x) for x in diacritics_factors]
-    val_set, val_steps, _ = MultiLevelDiacritizer.get_processed_window_dataset(
+    val_set = MultiLevelDiacritizer.get_processed_window_dataset(
         ['data/ATB3_val.txt'], 1024, DEFAULT_WINDOW_SIZE, DEFAULT_SLIDING_STEP
     )
 
@@ -204,22 +210,23 @@ if __name__ == '__main__':
                   [SparseCategoricalCrossentropy(from_logits=True, name='primary_loss'),
                    SparseCategoricalCrossentropy(from_logits=True, name='secondary_loss'),
                    BinaryCrossentropy(from_logits=True, name='shadda_loss'),
-                   BinaryCrossentropy(from_logits=True, name='sukoon_loss'),
-                   ],
+                   BinaryCrossentropy(from_logits=True, name='sukoon_loss')],
                   )
     model_path = f'params/{model.name}.h5'
     if os.path.exists(model_path):
         model.load_weights(model_path, by_name=True, skip_mismatch=True)
-    model.fit(train_set.repeat(), steps_per_epoch=train_steps, epochs=1, initial_epoch=0,
+    model.fit(train_set['dataset'].repeat(), steps_per_epoch=train_set['size'], epochs=1, initial_epoch=0,
               # class_weight={output.name.split('/')[0]: dict(enumerate(diacritics_factors[i]))
               #               for i, output in enumerate(model.outputs)},
-              validation_data=val_set.repeat(), validation_steps=val_steps,
+              validation_data=val_set['dataset'].repeat(), validation_steps=val_set['size'],
               callbacks=[ModelCheckpoint(model_path, save_best_only=True, save_weights_only=True, monitor='loss'),
                          TerminateOnNaN(),
                          LambdaCallback(
                              on_epoch_end=lambda epoch, logs: print(
-                                 model.generate_sentence_from_batch(next(iter(val_set.shuffle(10).take(1)))[0],
-                                                                    DEFAULT_SLIDING_STEP).numpy().decode('UTF-8')
+                                 model.generate_sentence_from_batch(
+                                     next(iter(val_set['dataset'].skip(randint(1, val_set['size'] - 1)).take(1)))[0],
+                                     DEFAULT_SLIDING_STEP
+                                 ).numpy().decode('UTF-8')
                              )
                          )]
               )
