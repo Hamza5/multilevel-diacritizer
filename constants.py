@@ -1,4 +1,5 @@
 import re
+from pathlib import Path
 
 import tensorflow as tf
 
@@ -13,11 +14,18 @@ NUMBER = '0'
 NUMBER_PATTERN = re.compile(r'\d+(?:\.\d+)?')
 
 
+DATASET_FILE_NAME = 'Tashkeela-processed.zip'
 DEFAULT_WINDOW_SIZE = 32
 DEFAULT_SLIDING_STEP = 5
 DEFAULT_EMBEDDING_SIZE = 64
 DEFAULT_LSTM_SIZE = 128
 DEFAULT_DROPOUT_RATE = 0.15
+DEFAULT_DATA_DIR = Path('data/')
+DEFAULT_PARAMS_DIR = Path('params/')
+DEFAULT_BATCH_SIZE = 1024
+DEFAULT_TRAIN_STEPS = 200
+DEFAULT_EARLY_STOPPING_STEPS = 3
+DEFAULT_MONITOR_METRIC = 'loss'
 
 
 CHARS = sorted(ARABIC_LETTERS.union({NUMBER, ' '}))

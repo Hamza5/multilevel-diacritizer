@@ -12,9 +12,6 @@ from processing import (DIACRITICS, NUMBER, NUMBER_PATTERN, SEPARATED_SUFFIXES, 
                         HAMZAT_PATTERN, ORDINARY_ARABIC_LETTERS_PATTERN, ARABIC_LETTERS, clear_diacritics,
                         SENTENCE_TOKENIZATION_REGEXP, PRIMARY_DIACRITICS, SECONDARY_DIACRITICS, SHADDA, SUKOON)
 
-DATASET_FILE_NAME = 'Tashkeela-processed.zip'
-WINDOW_SIZE = 21
-SLIDING_STEP = WINDOW_SIZE // 4
 OPTIMIZER = tf.keras.optimizers.RMSprop()
 TF_CHAR_ENCODING = 'UTF8_CHAR'
 MONITOR_VALUE = 'loss'
@@ -99,15 +96,6 @@ DECODE_DIACRITICS_TABLE = tf.lookup.StaticHashTable(
 def no_padding_accuracy(y_true, y_pred):
     return tf.reduce_mean(tf.cast(tf.equal(y_true, tf.cast(tf.argmax(y_pred, axis=-1),
                                                            tf.float32))[tf.greater(y_true, 0)], tf.float32))
-
-
-def download_data(data_dir, download_url):
-    assert isinstance(data_dir, Path)
-    assert isinstance(download_url, str)
-    data_dir = data_dir.expanduser()
-    dataset_file_path = data_dir.joinpath(DATASET_FILE_NAME)
-    tf.keras.utils.get_file(str(dataset_file_path.absolute()), download_url, cache_dir=str(data_dir.absolute()),
-                            cache_subdir=str(data_dir.absolute()), extract=True)
 
 
 def train(data_dir, params_dir, epochs, batch_size, early_stop):
