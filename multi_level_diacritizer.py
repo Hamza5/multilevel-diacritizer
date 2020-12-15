@@ -88,8 +88,9 @@ if __name__ == '__main__':
         import numpy as np
         from tensorflow.keras.optimizers import RMSprop
         from tensorflow.keras.losses import SparseCategoricalCrossentropy, BinaryCrossentropy
-        from tensorflow.keras.callbacks import ModelCheckpoint, TerminateOnNaN, LambdaCallback, EarlyStopping
-        from multi_level_diacritization import MultiLevelDiacritizer
+        from tensorflow.keras.callbacks import (ModelCheckpoint, TerminateOnNaN, LambdaCallback, EarlyStopping,
+                                                TensorBoard)
+        from model import MultiLevelDiacritizer
 
         model = MultiLevelDiacritizer(window_size=args.window_size, lstm_size=args.lstm_size,
                                       dropout_rate=args.dropout_rate, embedding_size=args.embedding_size,
@@ -153,12 +154,12 @@ if __name__ == '__main__':
                                          args.sliding_step
                                      ).numpy().decode('UTF-8')
                                  )
-                             ), LambdaCallback(on_epoch_end=write_epoch)
+                             ), LambdaCallback(on_epoch_end=write_epoch), TensorBoard()
                              ]
                   )
         logger.info('Training finished.')
     elif args.subcommand == 'test':
-        from multi_level_diacritization import MultiLevelDiacritizer
+        from model import MultiLevelDiacritizer
         from metrics import DiacritizationErrorRate, WordErrorRate
 
         model = MultiLevelDiacritizer(window_size=args.window_size, lstm_size=args.lstm_size,

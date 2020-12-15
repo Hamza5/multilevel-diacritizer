@@ -1,6 +1,6 @@
 import tensorflow as tf
-from keras import Model, Input
-from keras.layers import Embedding, LSTM, Dense, Bidirectional
+from tensorflow.keras import Model, Input
+from tensorflow.keras.layers import Embedding, LSTM, Dense, Bidirectional
 
 from constants import (NUMBER, NUMBER_PATTERN, DIACRITICS, PRIMARY_DIACRITICS, SECONDARY_DIACRITICS, SHADDA, SUKOON,
                        DEFAULT_WINDOW_SIZE, DEFAULT_SLIDING_STEP, DEFAULT_EMBEDDING_SIZE, DEFAULT_LSTM_SIZE,
