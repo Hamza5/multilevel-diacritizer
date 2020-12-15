@@ -13,7 +13,7 @@ from metrics import DiacritizationErrorRate, WordErrorRate
 class MultiLevelDiacritizer(Model):
 
     def __init__(self, window_size=DEFAULT_WINDOW_SIZE, lstm_size=DEFAULT_LSTM_SIZE, dropout_rate=DEFAULT_DROPOUT_RATE,
-                 embedding_size=DEFAULT_EMBEDDING_SIZE, name=None, test_der=True, test_wer=True, **kwargs):
+                 embedding_size=DEFAULT_EMBEDDING_SIZE, name=None, test_der=False, test_wer=False, **kwargs):
         inputs = Input(shape=(window_size,), name='input')
         embedding = Embedding(len(CHARS) + 1, embedding_size, name='embedding')(inputs)
 
@@ -90,8 +90,12 @@ class MultiLevelDiacritizer(Model):
                  encoded_sukoon_diacritics))
 
     @classmethod
+    def get_processed_sentences_dataset(cls, file_paths):
+        return tf.data.TextLineDataset(file_paths).map(cls.clean_and_encode_sentence, tf.data.experimental.AUTOTUNE)
+
+    @classmethod
     def get_processed_window_dataset(cls, file_paths, batch_size, window_size, sliding_step):
-        dataset = tf.data.TextLineDataset(file_paths).map(cls.clean_and_encode_sentence, tf.data.experimental.AUTOTUNE)
+        dataset = cls.get_processed_sentences_dataset(file_paths)
         dataset = dataset.concatenate(tf.data.Dataset.from_tensor_slices((
             tf.zeros((1, sliding_step), tf.int32),
             tuple(tf.zeros((1, sliding_step), tf.int32) for _ in range(4))
@@ -150,17 +154,29 @@ class MultiLevelDiacritizer(Model):
         return tf.transpose(tf.map_fn(most_probable_valid_choice, tf.transpose(padded_windows)))
 
     @classmethod
-    def decode_encoded_sentence(cls, encoded_letters, encoded_diacritics):
+    def combine_letters_diacritics(cls, letters__diacritics):
+        return tf.strings.reduce_join(tf.strings.reduce_join(letters__diacritics, axis=0))
+
+    @classmethod
+    def decode_encoded_letters(cls, encoded_letters):
+        return DECODE_LETTERS_TABLE.lookup(encoded_letters)
+
+    @classmethod
+    def decode_encoded_diacritics(cls, encoded_diacritics):
         (encoded_primary_diacritics, encoded_secondary_diacritics,
          encoded_shadda_diacritics, encoded_sukoon_diacritics) = encoded_diacritics
-        letters = DECODE_LETTERS_TABLE.lookup(encoded_letters)
         primary_diacritics = DECODE_PRIMARY_TABLE.lookup(encoded_primary_diacritics)
         secondary_diacritics = DECODE_SECONDARY_TABLE.lookup(encoded_secondary_diacritics)
         shadda_diacritics = DECODE_SHADDA_TABLE.lookup(encoded_shadda_diacritics)
         sukoon_diacritics = DECODE_SUKOON_TABLE.lookup(encoded_sukoon_diacritics)
-        diacritics = cls.combine_diacritics(primary_diacritics, secondary_diacritics, shadda_diacritics,
-                                            sukoon_diacritics)
-        return tf.strings.reduce_join(tf.strings.reduce_join((letters, diacritics), axis=0))
+        return cls.combine_diacritics(primary_diacritics, secondary_diacritics, shadda_diacritics,
+                                      sukoon_diacritics)
+
+    @classmethod
+    def decode_encoded_sentence(cls, encoded_letters, encoded_diacritics):
+        letters = cls.decode_encoded_letters(encoded_letters)
+        diacritics = cls.decode_encoded_diacritics(encoded_diacritics)
+        return letters, diacritics
 
     def test_step(self, data):
         logs = super(MultiLevelDiacritizer, self).test_step(data)
@@ -184,4 +200,6 @@ class MultiLevelDiacritizer(Model):
         sec_pred = self.combine_windows(tf.argmax(sec_pred, axis=2, output_type=tf.int32), sliding_step)
         sh_pred = self.combine_windows(tf.cast(tf.sigmoid(sh_pred) >= 0.5, tf.int32)[:, :, 0], sliding_step)
         su_pred = self.combine_windows(tf.cast(tf.sigmoid(su_pred) >= 0.5, tf.int32)[:, :, 0], sliding_step)
-        return self.decode_encoded_sentence(in_letters, (pri_pred, sec_pred, sh_pred, su_pred))
+        return self.combine_letters_diacritics(
+            self.decode_encoded_sentence(in_letters, (pri_pred, sec_pred, sh_pred, su_pred))
+        )

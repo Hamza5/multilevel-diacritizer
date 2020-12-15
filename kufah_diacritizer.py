@@ -2,6 +2,10 @@
 from argparse import ArgumentParser
 from logging import getLogger, basicConfig
 from pathlib import Path
+import tensorflow as tf
+# The next two lines are added to avoid the crash of Tensorflow when calling a model on a GPU.
+physical_devices = tf.config.list_physical_devices('GPU')
+tf.config.experimental.set_memory_growth(physical_devices[0], enable=True)
 from constants import (DATASET_FILE_NAME, DEFAULT_DATA_DIR, DEFAULT_PARAMS_DIR, DEFAULT_TRAIN_STEPS, DEFAULT_BATCH_SIZE,
                        DEFAULT_EARLY_STOPPING_STEPS, DEFAULT_WINDOW_SIZE, DEFAULT_SLIDING_STEP, DEFAULT_MONITOR_METRIC,
                        DEFAULT_EMBEDDING_SIZE, DEFAULT_LSTM_SIZE, DEFAULT_DROPOUT_RATE)
@@ -22,7 +26,7 @@ if __name__ == '__main__':
     train_parser.add_argument('--train-file', '-t', type=Path, required=True, action='append',
                               help='The file(s) containing the training data.')
     train_parser.add_argument('--val-file', '-v', type=Path, required=True, action='append',
-                              help='The file(s) containing the testing data.')
+                              help='The file(s) containing the validation data.')
     train_parser.add_argument('--params-dir', '-p', type=Path, default=DEFAULT_PARAMS_DIR,
                               help='Directory used to store the model parameters.')
     train_parser.add_argument('--epochs', '-e', type=int, default=DEFAULT_TRAIN_STEPS,
@@ -51,13 +55,22 @@ if __name__ == '__main__':
                                    ' iteration.')
     train_parser.add_argument('--calculate-wer', '-w', action='store_true',
                               help='Calculate the Word Error Rate on the validation dataset after each iteration.')
-    # test_parser = subparsers.add_parser('test', help='Test the model on a dataset.')
-    # test_parser.add_argument('--data-dir', '-d', type=Path, default=DEFAULT_DATA_DIR,
-    #                          help='Directory which contains vocabulary and data files.')
-    # test_parser.add_argument('--params-dir', '-p', type=Path, default=DEFAULT_PARAMS_DIR,
-    #                          help='Directory containing the model parameters.')
-    # test_parser.add_argument('--batch-size', '-b', type=int, default=DEFAULT_BATCH_SIZE,
-    #                          help='Maximum number of elements in a single batch.')
+    test_parser = subparsers.add_parser('test', help='Test the model on a dataset.')
+    test_parser.add_argument('--test-file', '-t', type=Path, required=True, action='append',
+                             help='The file(s) containing the testing data.')
+    test_parser.add_argument('--params-dir', '-p', type=Path, default=DEFAULT_PARAMS_DIR,
+                             help='The directory where the model parameters are stored.')
+    test_parser.add_argument('--batch-size', '-b', type=int, default=DEFAULT_BATCH_SIZE,
+                             help='Maximum number of elements in a single batch.')
+    test_parser.add_argument('--embedding-size', type=int, default=DEFAULT_EMBEDDING_SIZE,
+                             help='The size of the embedding layer.')
+    test_parser.add_argument('--lstm-size', type=int, default=DEFAULT_LSTM_SIZE,
+                             help='The size of the lstm layers.')
+    test_parser.add_argument('--window-size', type=int, default=DEFAULT_WINDOW_SIZE,
+                             help='The number of characters in a single instance of the data.')
+    test_parser.add_argument('--sliding-step', type=int, default=DEFAULT_SLIDING_STEP,
+                             help='The number of characters to skip to generate between the start of two consecutive'
+                                  ' windows.')
     # diacritization_parser = subparsers.add_parser('diacritize', help='Diacritize some text.')
     # diacritization_parser.add_argument('--text', default='', help='Undiacritized text.')
     # diacritization_parser.add_argument('--params-dir', '-p', type=Path, default=DEFAULT_PARAMS_DIR,
@@ -81,7 +94,7 @@ if __name__ == '__main__':
         model = MultiLevelDiacritizer(window_size=args.window_size, lstm_size=args.lstm_size,
                                       dropout_rate=args.dropout_rate, embedding_size=args.embedding_size,
                                       test_der=args.calculate_der, test_wer=args.calculate_wer)
-        model.summary(positions=[.45, .6, .75, 1.])
+        model.summary(positions=[.45, .6, .75, 1.], print_fn=logger.info)
 
         logger.info('Loading the training data...')
         train_set = MultiLevelDiacritizer.get_processed_window_dataset(
@@ -104,7 +117,10 @@ if __name__ == '__main__':
             f'params/{model.name}-E{args.embedding_size}L{args.lstm_size}W{args.window_size}S{args.sliding_step}.h5'
         )
         if model_path.exists():
+            logger.info('Loading model weights from %s ...', str(model_path))
             model.load_weights(str(model_path), by_name=True, skip_mismatch=True)
+        else:
+            logger.info('Initializing random weights for the model %s ...', model.name)
 
         last_epoch_path = Path(f'{args.params_dir}/last_epoch.txt')
 
@@ -141,8 +157,47 @@ if __name__ == '__main__':
                              ]
                   )
         logger.info('Training finished.')
-    # elif args.subcommand == 'test':
-    #
-    #     test(args.data_dir, args.params_dir, args.batch_size)
-    # elif args.subcommand == 'diacritize':
-    #     diacritization(args.text, args.params_dir)
+    elif args.subcommand == 'test':
+        from multi_level_diacritization import MultiLevelDiacritizer
+        from metrics import DiacritizationErrorRate, WordErrorRate
+
+        model = MultiLevelDiacritizer(window_size=args.window_size, lstm_size=args.lstm_size,
+                                      embedding_size=args.embedding_size)
+        model.summary(positions=[.45, .6, .75, 1.], print_fn=logger.info)
+
+        logger.info('Loading the testing data...')
+        test_set = MultiLevelDiacritizer.get_processed_window_dataset(
+            [str(x) for x in args.test_file], args.batch_size, args.window_size, args.sliding_step
+        )
+
+        model_path = Path(
+            f'params/{model.name}-E{args.embedding_size}L{args.lstm_size}W{args.window_size}S{args.sliding_step}.h5'
+        ).absolute()
+        if model_path.exists():
+            logger.info('Loading model weights from %s ...', str(model_path))
+            model.load_weights(str(model_path), by_name=True, skip_mismatch=True)
+        else:
+            logger.warning('Weights file for the selected model is not found in %s.'
+                           ' The model weights are initialized randomly.', str(model_path.parent))
+
+        der = tf.Variable(0.0)
+        wer = tf.Variable(0.0)
+        count = tf.Variable(0.0)
+        logger.info('Calculating DER and WER...')
+        for i, (x, diacs) in test_set['dataset'].enumerate(1):
+            pri_pred, sec_pred, sh_pred, su_pred = model(x)
+            pred_diacs = [
+                MultiLevelDiacritizer.combine_windows(tf.argmax(v, axis=2, output_type=tf.int32), args.sliding_step)
+                for v in model(x)
+            ]
+            x = MultiLevelDiacritizer.combine_windows(x, args.sliding_step)
+            diacs = [MultiLevelDiacritizer.combine_windows(v, args.sliding_step) for v in diacs]
+            diacritics = MultiLevelDiacritizer.decode_encoded_diacritics(diacs)
+            pred_diacritics = MultiLevelDiacritizer.decode_encoded_diacritics(pred_diacs)
+            der.assign_add(1 - DiacritizationErrorRate.char_acc((diacritics, pred_diacritics, x)))
+            wer.assign_add(1 - WordErrorRate.word_acc((diacritics, pred_diacritics, x)))
+            count.assign_add(1)
+            logger.info('Batch %d/%d: DER = %f | WER = %f', i, test_set['size'],
+                        (der / count).numpy(), (wer / count).numpy())
+        logger.info('DER = %f', (der/count).numpy())
+        logger.info('WER = %f', (wer/count).numpy())
