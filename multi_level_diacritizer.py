@@ -115,8 +115,8 @@ if __name__ == '__main__':
                        BinaryCrossentropy(from_logits=True, name='shadda_loss'),
                        BinaryCrossentropy(from_logits=True, name='sukoon_loss')])
         model_path = Path(
-            f'params/{model.name}-E{args.embedding_size}L{args.lstm_size}W{args.window_size}S{args.sliding_step}.h5'
-        )
+            f'{DEFAULT_PARAMS_DIR}/{model.name}-E{args.embedding_size}L{args.lstm_size}W{args.window_size}S{args.sliding_step}.h5'
+        ).absolute()
         if model_path.exists():
             logger.info('Loading model weights from %s ...', str(model_path))
             model.load_weights(str(model_path), by_name=True, skip_mismatch=True)
@@ -138,8 +138,6 @@ if __name__ == '__main__':
 
         model.fit(train_set['dataset'].repeat(), steps_per_epoch=train_set['size'], epochs=args.epochs,
                   initial_epoch=get_initial_epoch(),
-                  # class_weight={output.name.split('/')[0]: dict(enumerate(diacritics_factors[i]))
-                  #               for i, output in enumerate(model.outputs)},
                   validation_data=val_set['dataset'].repeat(), validation_steps=val_set['size'],
                   callbacks=[ModelCheckpoint(str(model_path), save_best_only=True, save_weights_only=True,
                                              monitor=args.monitor_metric), TerminateOnNaN(),
@@ -172,7 +170,7 @@ if __name__ == '__main__':
         )
 
         model_path = Path(
-            f'params/{model.name}-E{args.embedding_size}L{args.lstm_size}W{args.window_size}S{args.sliding_step}.h5'
+            f'{DEFAULT_PARAMS_DIR}/{model.name}-E{args.embedding_size}L{args.lstm_size}W{args.window_size}S{args.sliding_step}.h5'
         ).absolute()
         if model_path.exists():
             logger.info('Loading model weights from %s ...', str(model_path))
