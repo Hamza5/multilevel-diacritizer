@@ -13,7 +13,7 @@ six = "*"
 name = "appnope"
 version = "0.1.2"
 description = "Disable App Nap on macOS >= 10.9"
-category = "main"
+category = "dev"
 optional = false
 python-versions = "*"
 
@@ -21,7 +21,7 @@ python-versions = "*"
 name = "argon2-cffi"
 version = "20.1.0"
 description = "The secure Argon2 password hashing algorithm."
-category = "main"
+category = "dev"
 optional = false
 python-versions = "*"
 
@@ -49,7 +49,7 @@ six = ">=1.6.1,<2.0"
 name = "attrs"
 version = "20.3.0"
 description = "Classes Without Boilerplate"
-category = "main"
+category = "dev"
 optional = false
 python-versions = ">=2.7, !=3.0.*, !=3.1.*, !=3.2.*, !=3.3.*"
 
@@ -63,7 +63,7 @@ tests_no_zope = ["coverage[toml] (>=5.0.2)", "hypothesis", "pympler", "pytest (>
 name = "backcall"
 version = "0.2.0"
 description = "Specifications for callback functions passed in to an API"
-category = "main"
+category = "dev"
 optional = false
 python-versions = "*"
 
@@ -71,7 +71,7 @@ python-versions = "*"
 name = "bleach"
 version = "3.2.1"
 description = "An easy safelist-based HTML-sanitizing tool."
-category = "main"
+category = "dev"
 optional = false
 python-versions = ">=2.7, !=3.0.*, !=3.1.*, !=3.2.*, !=3.3.*, !=3.4.*"
 
@@ -100,7 +100,7 @@ python-versions = "*"
 name = "cffi"
 version = "1.14.4"
 description = "Foreign Function Interface for Python calling C code."
-category = "main"
+category = "dev"
 optional = false
 python-versions = "*"
 
@@ -109,17 +109,17 @@ pycparser = "*"
 
 [[package]]
 name = "chardet"
-version = "3.0.4"
+version = "4.0.0"
 description = "Universal encoding detector for Python 2 and 3"
 category = "main"
 optional = false
-python-versions = "*"
+python-versions = ">=2.7, !=3.0.*, !=3.1.*, !=3.2.*, !=3.3.*, !=3.4.*"
 
 [[package]]
 name = "colorama"
 version = "0.4.4"
 description = "Cross-platform colored terminal text."
-category = "main"
+category = "dev"
 optional = false
 python-versions = ">=2.7, !=3.0.*, !=3.1.*, !=3.2.*, !=3.3.*, !=3.4.*"
 
@@ -127,7 +127,7 @@ python-versions = ">=2.7, !=3.0.*, !=3.1.*, !=3.2.*, !=3.3.*, !=3.4.*"
 name = "decorator"
 version = "4.4.2"
 description = "Decorators for Humans"
-category = "main"
+category = "dev"
 optional = false
 python-versions = ">=2.6, !=3.0.*, !=3.1.*"
 
@@ -135,7 +135,7 @@ python-versions = ">=2.6, !=3.0.*, !=3.1.*"
 name = "defusedxml"
 version = "0.6.0"
 description = "XML bomb protection for Python stdlib modules"
-category = "main"
+category = "dev"
 optional = false
 python-versions = ">=2.7, !=3.0.*, !=3.1.*, !=3.2.*, !=3.3.*, !=3.4.*"
 
@@ -143,7 +143,7 @@ python-versions = ">=2.7, !=3.0.*, !=3.1.*, !=3.2.*, !=3.3.*, !=3.4.*"
 name = "entrypoints"
 version = "0.3"
 description = "Discover and load entry points from installed packages."
-category = "main"
+category = "dev"
 optional = false
 python-versions = ">=2.7"
 
@@ -251,7 +251,7 @@ testing = ["packaging", "pep517", "unittest2", "importlib-resources (>=1.3)"]
 name = "ipykernel"
 version = "5.4.2"
 description = "IPython Kernel for Jupyter"
-category = "main"
+category = "dev"
 optional = false
 python-versions = ">=3.5"
 
@@ -269,7 +269,7 @@ test = ["pytest (!=5.3.4)", "pytest-cov", "flaky", "nose"]
 name = "ipython"
 version = "7.9.0"
 description = "IPython: Productive Interactive Computing"
-category = "main"
+category = "dev"
 optional = false
 python-versions = ">=3.5"
 
@@ -301,7 +301,7 @@ test = ["nose (>=0.10.1)", "requests", "testpath", "pygments", "nbformat", "ipyk
 name = "ipython-genutils"
 version = "0.2.0"
 description = "Vestigial utilities from IPython"
-category = "main"
+category = "dev"
 optional = false
 python-versions = "*"
 
@@ -309,7 +309,7 @@ python-versions = "*"
 name = "ipywidgets"
 version = "7.5.1"
 description = "IPython HTML widgets for Jupyter"
-category = "main"
+category = "dev"
 optional = false
 python-versions = "*"
 
@@ -327,7 +327,7 @@ test = ["pytest (>=3.6.0)", "pytest-cov", "mock"]
 name = "jedi"
 version = "0.17.2"
 description = "An autocompletion tool for Python that can be used for text editors."
-category = "main"
+category = "dev"
 optional = false
 python-versions = ">=2.7, !=3.0.*, !=3.1.*, !=3.2.*, !=3.3.*, !=3.4.*"
 
@@ -342,7 +342,7 @@ testing = ["Django (<3.1)", "colorama", "docopt", "pytest (>=3.9.0,<5.0.0)"]
 name = "jinja2"
 version = "2.11.2"
 description = "A very fast and expressive template engine."
-category = "main"
+category = "dev"
 optional = false
 python-versions = ">=2.7, !=3.0.*, !=3.1.*, !=3.2.*, !=3.3.*, !=3.4.*"
 
@@ -356,7 +356,7 @@ i18n = ["Babel (>=0.8)"]
 name = "jsonschema"
 version = "3.2.0"
 description = "An implementation of JSON Schema validation for Python"
-category = "main"
+category = "dev"
 optional = false
 python-versions = "*"
 
@@ -374,7 +374,7 @@ format_nongpl = ["idna", "jsonpointer (>1.13)", "webcolors", "rfc3986-validator 
 name = "jupyter"
 version = "1.0.0"
 description = "Jupyter metapackage. Install all the Jupyter components in one go."
-category = "main"
+category = "dev"
 optional = false
 python-versions = "*"
 
@@ -390,7 +390,7 @@ qtconsole = "*"
 name = "jupyter-client"
 version = "6.1.7"
 description = "Jupyter protocol implementation and client libraries"
-category = "main"
+category = "dev"
 optional = false
 python-versions = ">=3.5"
 
@@ -408,7 +408,7 @@ test = ["ipykernel", "ipython", "mock", "pytest", "pytest-asyncio", "async-gener
 name = "jupyter-console"
 version = "6.1.0"
 description = "Jupyter terminal console"
-category = "main"
+category = "dev"
 optional = false
 python-versions = ">=3.5"
 
@@ -426,7 +426,7 @@ test = ["pexpect"]
 name = "jupyter-core"
 version = "4.6.3"
 description = "Jupyter core package. A base package on which Jupyter projects rely."
-category = "main"
+category = "dev"
 optional = false
 python-versions = "!=3.0,!=3.1,!=3.2,!=3.3,!=3.4,>=2.7"
 
@@ -469,7 +469,7 @@ testing = ["coverage", "pyyaml"]
 name = "markupsafe"
 version = "1.1.1"
 description = "Safely add untrusted strings to HTML/XML markup."
-category = "main"
+category = "dev"
 optional = false
 python-versions = ">=2.7,!=3.0.*,!=3.1.*,!=3.2.*,!=3.3.*"
 
@@ -477,7 +477,7 @@ python-versions = ">=2.7,!=3.0.*,!=3.1.*,!=3.2.*,!=3.3.*"
 name = "mistune"
 version = "0.8.4"
 description = "The fastest markdown parser in pure Python"
-category = "main"
+category = "dev"
 optional = false
 python-versions = "*"
 
@@ -485,7 +485,7 @@ python-versions = "*"
 name = "nbconvert"
 version = "5.6.1"
 description = "Converting Jupyter Notebooks"
-category = "main"
+category = "dev"
 optional = false
 python-versions = ">=2.7, !=3.0.*, !=3.1.*, !=3.2.*, !=3.3.*, !=3.4.*"
 
@@ -513,7 +513,7 @@ test = ["pytest", "pytest-cov", "ipykernel", "jupyter-client (>=5.3.1)", "ipywid
 name = "nbformat"
 version = "5.0.8"
 description = "The Jupyter Notebook format"
-category = "main"
+category = "dev"
 optional = false
 python-versions = ">=3.5"
 
@@ -531,7 +531,7 @@ test = ["fastjsonschema", "testpath", "pytest", "pytest-cov"]
 name = "notebook"
 version = "6.1.5"
 description = "A web-based notebook environment for interactive computing"
-category = "main"
+category = "dev"
 optional = false
 python-versions = ">=3.5"
 
@@ -595,7 +595,7 @@ tests = ["pytest", "pytest-cov", "pytest-pep8"]
 name = "packaging"
 version = "20.8"
 description = "Core utilities for Python packages"
-category = "main"
+category = "dev"
 optional = false
 python-versions = ">=2.7, !=3.0.*, !=3.1.*, !=3.2.*, !=3.3.*"
 
@@ -606,7 +606,7 @@ pyparsing = ">=2.0.2"
 name = "pandocfilters"
 version = "1.4.3"
 description = "Utilities for writing pandoc filters in python"
-category = "main"
+category = "dev"
 optional = false
 python-versions = ">=2.7, !=3.0.*, !=3.1.*, !=3.2.*, !=3.3.*"
 
@@ -614,7 +614,7 @@ python-versions = ">=2.7, !=3.0.*, !=3.1.*, !=3.2.*, !=3.3.*"
 name = "parso"
 version = "0.7.1"
 description = "A Python Parser"
-category = "main"
+category = "dev"
 optional = false
 python-versions = ">=2.7, !=3.0.*, !=3.1.*, !=3.2.*, !=3.3.*"
 
@@ -625,7 +625,7 @@ testing = ["docopt", "pytest (>=3.0.7)"]
 name = "pexpect"
 version = "4.8.0"
 description = "Pexpect allows easy control of interactive console applications."
-category = "main"
+category = "dev"
 optional = false
 python-versions = "*"
 
@@ -636,7 +636,7 @@ ptyprocess = ">=0.5"
 name = "pickleshare"
 version = "0.7.5"
 description = "Tiny 'shelve'-like database with concurrency support"
-category = "main"
+category = "dev"
 optional = false
 python-versions = "*"
 
@@ -644,7 +644,7 @@ python-versions = "*"
 name = "prometheus-client"
 version = "0.9.0"
 description = "Python client for the Prometheus monitoring system."
-category = "main"
+category = "dev"
 optional = false
 python-versions = "*"
 
@@ -655,7 +655,7 @@ twisted = ["twisted"]
 name = "prompt-toolkit"
 version = "2.0.10"
 description = "Library for building powerful interactive command lines in Python"
-category = "main"
+category = "dev"
 optional = false
 python-versions = ">=2.6, !=3.0.*, !=3.1.*, !=3.2.*"
 
@@ -678,7 +678,7 @@ six = ">=1.9"
 name = "ptyprocess"
 version = "0.6.0"
 description = "Run a subprocess in a pseudo terminal"
-category = "main"
+category = "dev"
 optional = false
 python-versions = "*"
 
@@ -686,7 +686,7 @@ python-versions = "*"
 name = "py"
 version = "1.10.0"
 description = "library with cross-python path, ini-parsing, io, code, log facilities"
-category = "main"
+category = "dev"
 optional = false
 python-versions = ">=2.7, !=3.0.*, !=3.1.*, !=3.2.*, !=3.3.*"
 
@@ -713,7 +713,7 @@ pyasn1 = ">=0.4.6,<0.5.0"
 name = "pycparser"
 version = "2.20"
 description = "C parser in Python"
-category = "main"
+category = "dev"
 optional = false
 python-versions = ">=2.7, !=3.0.*, !=3.1.*, !=3.2.*, !=3.3.*"
 
@@ -721,7 +721,7 @@ python-versions = ">=2.7, !=3.0.*, !=3.1.*, !=3.2.*, !=3.3.*"
 name = "pygments"
 version = "2.7.3"
 description = "Pygments is a syntax highlighting package written in Python."
-category = "main"
+category = "dev"
 optional = false
 python-versions = ">=3.5"
 
@@ -729,7 +729,7 @@ python-versions = ">=3.5"
 name = "pyparsing"
 version = "2.4.7"
 description = "Python parsing module"
-category = "main"
+category = "dev"
 optional = false
 python-versions = ">=2.6, !=3.0.*, !=3.1.*, !=3.2.*"
 
@@ -737,7 +737,7 @@ python-versions = ">=2.6, !=3.0.*, !=3.1.*, !=3.2.*"
 name = "pyrsistent"
 version = "0.17.3"
 description = "Persistent/Functional/Immutable data structures"
-category = "main"
+category = "dev"
 optional = false
 python-versions = ">=3.5"
 
@@ -745,7 +745,7 @@ python-versions = ">=3.5"
 name = "python-dateutil"
 version = "2.8.1"
 description = "Extensions to the standard Python datetime module"
-category = "main"
+category = "dev"
 optional = false
 python-versions = "!=3.0.*,!=3.1.*,!=3.2.*,>=2.7"
 
@@ -756,7 +756,7 @@ six = ">=1.5"
 name = "pywin32"
 version = "300"
 description = "Python for Window Extensions"
-category = "main"
+category = "dev"
 optional = false
 python-versions = "*"
 
@@ -764,7 +764,7 @@ python-versions = "*"
 name = "pywinpty"
 version = "0.5.7"
 description = "Python bindings for the winpty library"
-category = "main"
+category = "dev"
 optional = false
 python-versions = "*"
 
@@ -772,7 +772,7 @@ python-versions = "*"
 name = "pyzmq"
 version = "20.0.0"
 description = "Python bindings for 0MQ"
-category = "main"
+category = "dev"
 optional = false
 python-versions = ">=3.5"
 
@@ -784,7 +784,7 @@ py = {version = "*", markers = "implementation_name === \"pypy\""}
 name = "qtconsole"
 version = "5.0.0"
 description = "Jupyter Qt console"
-category = "main"
+category = "dev"
 optional = false
 python-versions = "*"
 
@@ -806,13 +806,13 @@ test = ["flaky", "pytest", "pytest-qt"]
 name = "qtpy"
 version = "1.9.0"
 description = "Provides an abstraction layer on top of the various Qt bindings (PyQt5, PyQt4 and PySide) and additional custom QWidgets."
-category = "main"
+category = "dev"
 optional = false
 python-versions = "*"
 
 [[package]]
 name = "requests"
-version = "2.25.0"
+version = "2.25.1"
 description = "Python HTTP for Humans."
 category = "main"
 optional = false
@@ -820,7 +820,7 @@ python-versions = ">=2.7, !=3.0.*, !=3.1.*, !=3.2.*, !=3.3.*, !=3.4.*"
 
 [package.dependencies]
 certifi = ">=2017.4.17"
-chardet = ">=3.0.2,<4"
+chardet = ">=3.0.2,<5"
 idna = ">=2.5,<3"
 urllib3 = ">=1.21.1,<1.27"
 
@@ -858,7 +858,7 @@ pyasn1 = ">=0.1.3"
 name = "send2trash"
 version = "1.5.0"
 description = "Send file to trash natively under Mac OS X, Windows and Linux."
-category = "main"
+category = "dev"
 optional = false
 python-versions = "*"
 
@@ -944,7 +944,7 @@ python-versions = "*"
 name = "terminado"
 version = "0.8.3"
 description = "Terminals served to xterm.js using Tornado websockets"
-category = "main"
+category = "dev"
 optional = false
 python-versions = ">=2.7, !=3.0.*, !=3.1.*, !=3.2.*, !=3.3.*"
 
@@ -957,7 +957,7 @@ tornado = ">=4"
 name = "testpath"
 version = "0.4.4"
 description = "Test utilities for code working with files and commands"
-category = "main"
+category = "dev"
 optional = false
 python-versions = "*"
 
@@ -968,7 +968,7 @@ test = ["pathlib2"]
 name = "tornado"
 version = "6.1"
 description = "Tornado is a Python web framework and asynchronous networking library, originally developed at FriendFeed."
-category = "main"
+category = "dev"
 optional = false
 python-versions = ">= 3.5"
 
@@ -976,7 +976,7 @@ python-versions = ">= 3.5"
 name = "traitlets"
 version = "4.3.3"
 description = "Traitlets Python config system"
-category = "main"
+category = "dev"
 optional = false
 python-versions = "*"
 
@@ -1005,7 +1005,7 @@ socks = ["PySocks (>=1.5.6,!=1.5.7,<2.0)"]
 name = "wcwidth"
 version = "0.2.5"
 description = "Measures the displayed width of unicode strings in a terminal"
-category = "main"
+category = "dev"
 optional = false
 python-versions = "*"
 
@@ -1013,7 +1013,7 @@ python-versions = "*"
 name = "webencodings"
 version = "0.5.1"
 description = "Character encoding aliases for legacy web content"
-category = "main"
+category = "dev"
 optional = false
 python-versions = "*"
 
@@ -1033,7 +1033,7 @@ watchdog = ["watchdog"]
 name = "widgetsnbextension"
 version = "3.5.1"
 description = "IPython HTML widgets for Jupyter"
-category = "main"
+category = "dev"
 optional = false
 python-versions = "*"
 
@@ -1044,7 +1044,7 @@ notebook = ">=4.4.1"
 name = "win-unicode-console"
 version = "0.5"
 description = "Enable Unicode input and display when running Python from Windows console."
-category = "main"
+category = "dev"
 optional = false
 python-versions = "*"
 
@@ -1071,7 +1071,7 @@ testing = ["pathlib2", "unittest2", "jaraco.itertools", "func-timeout"]
 [metadata]
 lock-version = "1.1"
 python-versions = ">=3.5,<3.8"
-content-hash = "cee75a8c2a76cdc04d2462de154a2b20f9b73e180e15df73c996baad78eecfbb"
+content-hash = "0d7c0aa77a9f4e45b9cf9fb75f12b55e25114cb0eaa16e760d2dfdcaebc8f28d"
 
 [metadata.files]
 absl-py = [
@@ -1165,8 +1165,8 @@ cffi = [
     {file = "cffi-1.14.4.tar.gz", hash = "sha256:1a465cbe98a7fd391d47dce4b8f7e5b921e6cd805ef421d04f5f66ba8f06086c"},
 ]
 chardet = [
-    {file = "chardet-3.0.4-py2.py3-none-any.whl", hash = "sha256:fc323ffcaeaed0e0a02bf4d117757b98aed530d9ed4531e3e15460124c106691"},
-    {file = "chardet-3.0.4.tar.gz", hash = "sha256:84ab92ed1c4d4f16916e05906b6b75a6c0fb5db821cc65e70cbd64a3e2a5eaae"},
+    {file = "chardet-4.0.0-py2.py3-none-any.whl", hash = "sha256:f864054d66fd9118f2e67044ac8981a54775ec5b67aed0441892edb553d21da5"},
+    {file = "chardet-4.0.0.tar.gz", hash = "sha256:0d6f53a15db4120f2b08c94f11e7d93d2c911ee118b6b30a04ec3ee8310179fa"},
 ]
 colorama = [
     {file = "colorama-0.4.4-py2.py3-none-any.whl", hash = "sha256:9f47eda37229f68eee03b24b9748937c7dc3868f906e8ba69fbcbdd3bc5dc3e2"},
@@ -1592,8 +1592,8 @@ qtpy = [
     {file = "QtPy-1.9.0.tar.gz", hash = "sha256:2db72c44b55d0fe1407be8fba35c838ad0d6d3bb81f23007886dc1fc0f459c8d"},
 ]
 requests = [
-    {file = "requests-2.25.0-py2.py3-none-any.whl", hash = "sha256:e786fa28d8c9154e6a4de5d46a1d921b8749f8b74e28bde23768e5e16eece998"},
-    {file = "requests-2.25.0.tar.gz", hash = "sha256:7f1a0b932f4a60a1a65caa4263921bb7d9ee911957e0ae4a23a6dd08185ad5f8"},
+    {file = "requests-2.25.1-py2.py3-none-any.whl", hash = "sha256:c210084e36a42ae6b9219e00e48287def368a26d03a048ddad7bfee44f75871e"},
+    {file = "requests-2.25.1.tar.gz", hash = "sha256:27973dd4a904a4f13b263a19c866c13b92a39ed1c964655f025f3f8d3d75b804"},
 ]
 requests-oauthlib = [
     {file = "requests-oauthlib-1.3.0.tar.gz", hash = "sha256:b4261601a71fd721a8bd6d7aa1cc1d6a8a93b4a9f5e96626f8e4d91e8beeaa6a"},

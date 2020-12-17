@@ -1,16 +1,16 @@
 [tool.poetry]
 name = "multilevel-diacritizer"
 version = "0.1.0"
-description = "Automatic Arabic diacritization tool based on deep learning that allows different styles of diacritization."
+description = "Extensible DL-based automatic Arabic diacritization model allowing diacritics restoration with selectable types."
 authors = ["Hamza Abbad <hamza.abbad@gmail.com>"]
 license = "MIT"
 
 [tool.poetry.dependencies]
 python = ">=3.5,<3.8"
 tensorflow = "~2.3"
-jupyter = "^1.0.0"
 
 [tool.poetry.dev-dependencies]
+jupyter = "^1.0.0"
 
 [build-system]
 requires = ["poetry-core>=1.0.0"]

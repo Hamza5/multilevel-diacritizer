@@ -2,13 +2,15 @@
 from argparse import ArgumentParser
 from logging import getLogger, basicConfig
 from pathlib import Path
+
 import tensorflow as tf
+
 # The next two lines are added to avoid the crash of Tensorflow when calling a model on a GPU.
 physical_devices = tf.config.list_physical_devices('GPU')
 tf.config.experimental.set_memory_growth(physical_devices[0], enable=True)
-from constants import (DATASET_FILE_NAME, DEFAULT_DATA_DIR, DEFAULT_PARAMS_DIR, DEFAULT_TRAIN_STEPS, DEFAULT_BATCH_SIZE,
-                       DEFAULT_EARLY_STOPPING_STEPS, DEFAULT_WINDOW_SIZE, DEFAULT_SLIDING_STEP, DEFAULT_MONITOR_METRIC,
-                       DEFAULT_EMBEDDING_SIZE, DEFAULT_LSTM_SIZE, DEFAULT_DROPOUT_RATE)
+from multilevel_diacritizer.constants import (DATASET_FILE_NAME, DEFAULT_DATA_DIR, DEFAULT_PARAMS_DIR, DEFAULT_TRAIN_STEPS, DEFAULT_BATCH_SIZE,
+                                              DEFAULT_EARLY_STOPPING_STEPS, DEFAULT_WINDOW_SIZE, DEFAULT_SLIDING_STEP, DEFAULT_MONITOR_METRIC,
+                                              DEFAULT_EMBEDDING_SIZE, DEFAULT_LSTM_SIZE, DEFAULT_DROPOUT_RATE)
 
 basicConfig(level='INFO', format='%(asctime)s | %(name)s: %(message)s', datefmt='%Y-%m-%d %I:%M:%S %p')
 logger = getLogger(__name__)
@@ -90,7 +92,7 @@ if __name__ == '__main__':
         from tensorflow.keras.losses import SparseCategoricalCrossentropy, BinaryCrossentropy
         from tensorflow.keras.callbacks import (ModelCheckpoint, TerminateOnNaN, LambdaCallback, EarlyStopping,
                                                 TensorBoard)
-        from model import MultiLevelDiacritizer
+        from multilevel_diacritizer.model import MultiLevelDiacritizer
 
         model = MultiLevelDiacritizer(window_size=args.window_size, lstm_size=args.lstm_size,
                                       dropout_rate=args.dropout_rate, embedding_size=args.embedding_size,
@@ -148,7 +150,7 @@ if __name__ == '__main__':
                                      model.generate_sentence_from_batch(
                                          next(iter(
                                              val_set['dataset'].skip(randint(1, val_set['size'] - 1)).take(1)
-                                         ))[0],
+                                         ))[0][:100],
                                          args.sliding_step
                                      ).numpy().decode('UTF-8')
                                  )
@@ -157,8 +159,8 @@ if __name__ == '__main__':
                   )
         logger.info('Training finished.')
     elif args.subcommand == 'test':
-        from model import MultiLevelDiacritizer
-        from metrics import DiacritizationErrorRate, WordErrorRate
+        from multilevel_diacritizer.model import MultiLevelDiacritizer
+        from multilevel_diacritizer.metrics import DiacritizationErrorRate, WordErrorRate
 
         model = MultiLevelDiacritizer(window_size=args.window_size, lstm_size=args.lstm_size,
                                       embedding_size=args.embedding_size)
