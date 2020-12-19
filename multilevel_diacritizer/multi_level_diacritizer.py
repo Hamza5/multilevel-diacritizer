@@ -8,9 +8,11 @@ import tensorflow as tf
 # The next two lines are added to avoid the crash of Tensorflow when calling a model on a GPU.
 physical_devices = tf.config.list_physical_devices('GPU')
 tf.config.experimental.set_memory_growth(physical_devices[0], enable=True)
-from multilevel_diacritizer.constants import (DATASET_FILE_NAME, DEFAULT_DATA_DIR, DEFAULT_PARAMS_DIR, DEFAULT_TRAIN_STEPS, DEFAULT_BATCH_SIZE,
-                                              DEFAULT_EARLY_STOPPING_STEPS, DEFAULT_WINDOW_SIZE, DEFAULT_SLIDING_STEP, DEFAULT_MONITOR_METRIC,
-                                              DEFAULT_EMBEDDING_SIZE, DEFAULT_LSTM_SIZE, DEFAULT_DROPOUT_RATE)
+from multilevel_diacritizer.constants import (
+    DATASET_FILE_NAME, DEFAULT_DATA_DIR, DEFAULT_PARAMS_DIR, DEFAULT_TRAIN_STEPS, DEFAULT_BATCH_SIZE,
+    DEFAULT_EARLY_STOPPING_STEPS, DEFAULT_WINDOW_SIZE, DEFAULT_SLIDING_STEP, DEFAULT_MONITOR_METRIC,
+    DEFAULT_EMBEDDING_SIZE, DEFAULT_LSTM_SIZE, DEFAULT_DROPOUT_RATE
+)
 
 basicConfig(level='INFO', format='%(asctime)s | %(name)s: %(message)s', datefmt='%Y-%m-%d %I:%M:%S %p')
 logger = getLogger(__name__)
@@ -150,7 +152,7 @@ if __name__ == '__main__':
                                      model.generate_sentence_from_batch(
                                          next(iter(
                                              val_set['dataset'].skip(randint(1, val_set['size'] - 1)).take(1)
-                                         ))[0][:100],
+                                         ))[0][:50],
                                          args.sliding_step
                                      ).numpy().decode('UTF-8')
                                  )
