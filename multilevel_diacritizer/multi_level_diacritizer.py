@@ -14,7 +14,7 @@ from multilevel_diacritizer.constants import (
     DEFAULT_EMBEDDING_SIZE, DEFAULT_LSTM_SIZE, DEFAULT_DROPOUT_RATE
 )
 
-basicConfig(level='INFO', format='%(asctime)s | %(name)s: %(message)s', datefmt='%Y-%m-%d %I:%M:%S %p')
+basicConfig(level='INFO', format='%(asctime)s | %(name)s: %(levelname)s %(message)s', datefmt='%Y-%m-%d %I:%M:%S %p')
 logger = getLogger(__name__)
 
 if __name__ == '__main__':
@@ -193,8 +193,9 @@ if __name__ == '__main__':
             logger.warning('Weights file for the selected model is not found in %s.'
                            ' The model weights are initialized randomly.', str(model_path.parent))
 
-        der = DiacritizationErrorRate()
-        wer = WordErrorRate()
+        der = tf.Variable(0.0)
+        wer = tf.Variable(0.0)
+        count = tf.Variable(0.0)
         logger.info('Calculating DER and WER...')
         for i, (x, diacs) in test_set['dataset'].enumerate(1):
             pri_pred, sec_pred, sh_pred, su_pred = model(x)
@@ -206,9 +207,12 @@ if __name__ == '__main__':
             diacs = [MultiLevelDiacritizer.combine_windows(v, args.sliding_step) for v in diacs]
             diacritics = MultiLevelDiacritizer.decode_encoded_diacritics(diacs)
             pred_diacritics = MultiLevelDiacritizer.decode_encoded_diacritics(pred_diacs)
-            der.update_state(diacritics, pred_diacritics, x)
-            wer.update_state(diacritics, pred_diacritics, x)
+            der.assign_add(1 - DiacritizationErrorRate.char_acc((diacritics, pred_diacritics, x)))
+            wer.assign_add(1 - WordErrorRate.word_acc((diacritics, pred_diacritics, x)))
+            count.assign_add(1)
             logger.info('Batch %d/%d: DER = %f | WER = %f', i, test_set['size'],
-                        der.result().numpy(), wer.result().numpy())
+                        (der / count).numpy(), (wer / count).numpy())
+        logger.info('DER = %f', (der / count).numpy())
+        logger.info('WER = %f', (wer / count).numpy())
     else:
         main_parser.print_help()
