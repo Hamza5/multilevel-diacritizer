@@ -194,7 +194,7 @@ class MultiLevelDiacritizer(Model):
                 self.wer.reset_states()
         return logs
 
-    def generate_sentence_from_batch(self, input_batch, sliding_step):
+    def predict_sentence_from_input_batch(self, input_batch, sliding_step):
         pri_pred, sec_pred, sh_pred, su_pred = self(input_batch)
         in_letters = self.combine_windows(input_batch, sliding_step)
         pri_pred = self.combine_windows(tf.argmax(pri_pred, axis=2, output_type=tf.int32), sliding_step)
@@ -204,3 +204,13 @@ class MultiLevelDiacritizer(Model):
         return self.combine_letters_diacritics(
             self.decode_encoded_sentence(in_letters, (pri_pred, sec_pred, sh_pred, su_pred))
         )
+
+    def generate_real_sentence_from_batch(self, batch, sliding_step):
+        x, y = batch
+        real = MultiLevelDiacritizer.combine_letters_diacritics(
+            MultiLevelDiacritizer.decode_encoded_sentence(
+                MultiLevelDiacritizer.combine_windows(x, sliding_step),
+                [MultiLevelDiacritizer.combine_windows(v, sliding_step) for v in y]
+            )
+        ).numpy().decode('UTF-8')
+        return real

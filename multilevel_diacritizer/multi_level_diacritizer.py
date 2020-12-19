@@ -113,21 +113,22 @@ if __name__ == '__main__':
             [str(x) for x in args.val_file], args.batch_size, args.window_size, args.sliding_step
         )
 
+        args.params_dir.mkdir(parents=True, exist_ok=True)
         model.compile(RMSprop(0.001),
                       [SparseCategoricalCrossentropy(from_logits=True, name='primary_loss'),
                        SparseCategoricalCrossentropy(from_logits=True, name='secondary_loss'),
                        BinaryCrossentropy(from_logits=True, name='shadda_loss'),
                        BinaryCrossentropy(from_logits=True, name='sukoon_loss')])
-        model_path = Path(
-            f'{DEFAULT_PARAMS_DIR}/{model.name}-E{args.embedding_size}L{args.lstm_size}W{args.window_size}S{args.sliding_step}.h5'
-        ).absolute()
+        model_path = args.params_dir / Path(
+            f'{model.name}-E{args.embedding_size}L{args.lstm_size}W{args.window_size}S{args.sliding_step}.h5'
+        )
         if model_path.exists():
             logger.info('Loading model weights from %s ...', str(model_path))
             model.load_weights(str(model_path), by_name=True, skip_mismatch=True)
         else:
             logger.info('Initializing random weights for the model %s ...', model.name)
 
-        last_epoch_path = Path(f'{args.params_dir}/last_epoch.txt')
+        last_epoch_path = args.params_dir / Path('last_epoch.txt')
 
         def write_epoch(epoch, logs):
             with last_epoch_path.open('w') as f:
@@ -140,6 +141,19 @@ if __name__ == '__main__':
                     return int(f.readline())
             return 0
 
+        def get_diacritization_preview(val_set, sliding_step, model, limit):
+            x, (pri, sec, sh, su) = next(iter(
+                    val_set['dataset'].skip(randint(1, val_set['size'] - 1)).take(1)
+                ))
+            x, pri, sec, sh, su = x[:limit], pri[:limit], sec[:limit], sh[:limit], su[:limit]
+            predicted = model.predict_sentence_from_input_batch(x, sliding_step).numpy().decode('UTF-8')
+            real = model.generate_real_sentence_from_batch(
+                (x, [pri, sec, sh, su]),
+                sliding_step
+            )
+            return predicted, real
+
+
         model.fit(train_set['dataset'].repeat(), steps_per_epoch=train_set['size'], epochs=args.epochs,
                   initial_epoch=get_initial_epoch(),
                   validation_data=val_set['dataset'].repeat(), validation_steps=val_set['size'],
@@ -148,13 +162,8 @@ if __name__ == '__main__':
                              EarlyStopping(monitor=args.monitor_metric, patience=args.early_stopping_epochs, verbose=1),
                              LambdaCallback(
                                  on_epoch_end=lambda epoch, logs: logger.info(
-                                     'Diacritization preview: %s',
-                                     model.generate_sentence_from_batch(
-                                         next(iter(
-                                             val_set['dataset'].skip(randint(1, val_set['size'] - 1)).take(1)
-                                         ))[0][:50],
-                                         args.sliding_step
-                                     ).numpy().decode('UTF-8')
+                                     '\nPredicted diacritization: %s\nReal diacritization: %s',
+                                     *get_diacritization_preview(val_set, args.sliding_step, model, 100)
                                  )
                              ), LambdaCallback(on_epoch_end=write_epoch), TensorBoard()
                              ]
@@ -173,9 +182,10 @@ if __name__ == '__main__':
             [str(x) for x in args.test_file], args.batch_size, args.window_size, args.sliding_step
         )
 
-        model_path = Path(
-            f'{DEFAULT_PARAMS_DIR}/{model.name}-E{args.embedding_size}L{args.lstm_size}W{args.window_size}S{args.sliding_step}.h5'
-        ).absolute()
+        args.params_dir.mkdir(parents=True, exist_ok=True)
+        model_path = args.params_dir / Path(
+            f'{model.name}-E{args.embedding_size}L{args.lstm_size}W{args.window_size}S{args.sliding_step}.h5'
+        )
         if model_path.exists():
             logger.info('Loading model weights from %s ...', str(model_path))
             model.load_weights(str(model_path), by_name=True, skip_mismatch=True)
@@ -183,9 +193,8 @@ if __name__ == '__main__':
             logger.warning('Weights file for the selected model is not found in %s.'
                            ' The model weights are initialized randomly.', str(model_path.parent))
 
-        der = tf.Variable(0.0)
-        wer = tf.Variable(0.0)
-        count = tf.Variable(0.0)
+        der = DiacritizationErrorRate()
+        wer = WordErrorRate()
         logger.info('Calculating DER and WER...')
         for i, (x, diacs) in test_set['dataset'].enumerate(1):
             pri_pred, sec_pred, sh_pred, su_pred = model(x)
@@ -197,10 +206,9 @@ if __name__ == '__main__':
             diacs = [MultiLevelDiacritizer.combine_windows(v, args.sliding_step) for v in diacs]
             diacritics = MultiLevelDiacritizer.decode_encoded_diacritics(diacs)
             pred_diacritics = MultiLevelDiacritizer.decode_encoded_diacritics(pred_diacs)
-            der.assign_add(1 - DiacritizationErrorRate.char_acc((diacritics, pred_diacritics, x)))
-            wer.assign_add(1 - WordErrorRate.word_acc((diacritics, pred_diacritics, x)))
-            count.assign_add(1)
+            der.update_state(diacritics, pred_diacritics, x)
+            wer.update_state(diacritics, pred_diacritics, x)
             logger.info('Batch %d/%d: DER = %f | WER = %f', i, test_set['size'],
-                        (der / count).numpy(), (wer / count).numpy())
-        logger.info('DER = %f', (der/count).numpy())
-        logger.info('WER = %f', (wer/count).numpy())
+                        der.result().numpy(), wer.result().numpy())
+    else:
+        main_parser.print_help()
