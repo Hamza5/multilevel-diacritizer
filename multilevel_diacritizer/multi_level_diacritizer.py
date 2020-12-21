@@ -14,7 +14,7 @@ from multilevel_diacritizer.constants import (
     DEFAULT_EMBEDDING_SIZE, DEFAULT_LSTM_SIZE, DEFAULT_DROPOUT_RATE
 )
 
-basicConfig(level='INFO', format='%(asctime)s | %(name)s: %(levelname)s %(message)s', datefmt='%Y-%m-%d %I:%M:%S %p')
+basicConfig(level='INFO', format='%(asctime)s [%(name)s] %(levelname)s: %(message)s', datefmt='%Y-%m-%d %I:%M:%S %p')
 logger = getLogger(__name__)
 
 if __name__ == '__main__':
@@ -89,7 +89,6 @@ if __name__ == '__main__':
         logger.info('Downloaded and extracted.')
     elif args.subcommand == 'train':
         from random import randint
-        import numpy as np
         from tensorflow.keras.optimizers import RMSprop
         from tensorflow.keras.losses import SparseCategoricalCrossentropy, BinaryCrossentropy
         from tensorflow.keras.callbacks import (ModelCheckpoint, TerminateOnNaN, LambdaCallback, EarlyStopping,
@@ -105,8 +104,6 @@ if __name__ == '__main__':
         train_set = MultiLevelDiacritizer.get_processed_window_dataset(
             [str(x) for x in args.train_file], args.batch_size, args.window_size, args.sliding_step
         )
-        diacritics_factors = [np.max(x) / x for x in train_set['diacritics_count']]
-        diacritics_factors = [x / np.sum(x) for x in diacritics_factors]
 
         logger.info('Loading the validation data...')
         val_set = MultiLevelDiacritizer.get_processed_window_dataset(

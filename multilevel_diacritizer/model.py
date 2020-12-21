@@ -15,27 +15,28 @@ class MultiLevelDiacritizer(Model):
 
     def __init__(self, window_size=DEFAULT_WINDOW_SIZE, lstm_size=DEFAULT_LSTM_SIZE, dropout_rate=DEFAULT_DROPOUT_RATE,
                  embedding_size=DEFAULT_EMBEDDING_SIZE, name=None, test_der=False, test_wer=False, **kwargs):
+
         inputs = Input(shape=(window_size,), name='input')
         embedding = Embedding(len(CHARS) + 1, embedding_size, name='embedding')(inputs)
 
         initial_layer = Bidirectional(LSTM(lstm_size, dropout=dropout_rate, return_sequences=True),
                                       name='initial_layer')(embedding)
-        primary_diacritics_layer = Bidirectional(LSTM(lstm_size, dropout=dropout_rate, return_sequences=True),
-                                                 name='primary_diacritics_layer')(initial_layer)
-        primary_diacritics_output = Dense(4, name='primary_diacritics_output')(primary_diacritics_layer)
-
-        secondary_diacritics_layer = Bidirectional(LSTM(lstm_size, dropout=dropout_rate, return_sequences=True),
-                                                   name='secondary_diacritics_layer')(primary_diacritics_layer)
-        secondary_diacritics_output = Dense(4, name='secondary_diacritics_output')(secondary_diacritics_layer)
-
-        shadda_layer = Bidirectional(LSTM(lstm_size, dropout=dropout_rate, return_sequences=True),
-                                     name='shadda_layer')(secondary_diacritics_layer)
-        shadda_output = Dense(1, name='shadda_output')(shadda_layer)
 
         sukoon_layer = Bidirectional(LSTM(lstm_size, dropout=dropout_rate, return_sequences=True),
-                                     name='sukoon_layer')(shadda_layer)
+                                     name='sukoon_layer')(initial_layer)
         sukoon_output = Dense(1, name='sukoon_output')(sukoon_layer)
 
+        shadda_layer = Bidirectional(LSTM(lstm_size, dropout=dropout_rate, return_sequences=True),
+                                     name='shadda_layer')(sukoon_layer)
+        shadda_output = Dense(1, name='shadda_output')(shadda_layer)
+
+        secondary_diacritics_layer = Bidirectional(LSTM(lstm_size, dropout=dropout_rate, return_sequences=True),
+                                                   name='secondary_diacritics_layer')(shadda_layer)
+        secondary_diacritics_output = Dense(4, name='secondary_diacritics_output')(secondary_diacritics_layer)
+
+        primary_diacritics_layer = Bidirectional(LSTM(lstm_size, dropout=dropout_rate, return_sequences=True),
+                                                 name='primary_diacritics_layer')(secondary_diacritics_layer)
+        primary_diacritics_output = Dense(4, name='primary_diacritics_output')(primary_diacritics_layer)
         super(MultiLevelDiacritizer, self).__init__(
             inputs=inputs,
             outputs=[primary_diacritics_output, secondary_diacritics_output, shadda_output, sukoon_output],
@@ -105,29 +106,8 @@ class MultiLevelDiacritizer(Model):
         dataset = dataset.unbatch().window(window_size, sliding_step, drop_remainder=True) \
             .flat_map(zip_data).batch(window_size, drop_remainder=True).batch(batch_size)
 
-        def count_diacritics(diacritics_count, new_element):
-            _, (primary_diacritics, secondary_diacritics, shadda_diacritics, sukoon_diacritics) = new_element
-            primary_count, secondary_count, shadda_count, sukoon_count = diacritics_count
-            primary_count += tf.reduce_sum(
-                tf.cast(tf.reshape(tf.range(4), (1, -1)) == tf.reshape(primary_diacritics, (-1, 1)), tf.int32),
-                axis=0)
-            secondary_count += tf.reduce_sum(
-                tf.cast(tf.reshape(tf.range(4), (1, -1)) == tf.reshape(secondary_diacritics, (-1, 1)), tf.int32),
-                axis=0)
-            shadda_count += tf.reduce_sum(
-                tf.cast(tf.reshape(tf.range(2), (1, -1)) == tf.reshape(shadda_diacritics, (-1, 1)), tf.int32),
-                axis=0)
-            sukoon_count += tf.reduce_sum(
-                tf.cast(tf.reshape(tf.range(2), (1, -1)) == tf.reshape(sukoon_diacritics, (-1, 1)), tf.int32),
-                axis=0)
-            return primary_count, secondary_count, shadda_count, sukoon_count
-
-        diacritics_count = dataset.reduce((tf.zeros(4, tf.int32), tf.zeros(4, tf.int32), tf.zeros(1, tf.int32),
-                                           tf.zeros(1, tf.int32)), count_diacritics)
-        diacritics_count = [x.numpy() for x in diacritics_count]
         size = dataset.reduce(0, lambda old, new: old + 1).numpy()
-        return {'dataset': dataset.prefetch(tf.data.experimental.AUTOTUNE), 'size': size,
-                'diacritics_count': diacritics_count}
+        return {'dataset': dataset.prefetch(tf.data.experimental.AUTOTUNE), 'size': size}
 
     @staticmethod
     def combine_diacritics(primary_diacritics, secondary_diacritics, shadda_diacritics, sukoon_diacritics):
