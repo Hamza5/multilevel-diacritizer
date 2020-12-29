@@ -17,6 +17,24 @@ from multilevel_diacritizer.constants import (
 basicConfig(level='INFO', format='%(asctime)s [%(name)s] %(levelname)s: %(message)s', datefmt='%Y-%m-%d %I:%M:%S %p')
 logger = getLogger(__name__)
 
+
+def get_loaded_model(args):
+    model = MultiLevelDiacritizer(window_size=args.window_size, lstm_size=args.lstm_size,
+                                  dropout_rate=args.dropout_rate, embedding_size=args.embedding_size,
+                                  test_der=args.calculate_der, test_wer=args.calculate_wer)
+    model.summary(positions=[.45, .6, .75, 1.], print_fn=logger.info)
+    args.params_dir.mkdir(parents=True, exist_ok=True)
+    model_path = args.params_dir / Path(
+        f'{model.name}-E{args.embedding_size}L{args.lstm_size}W{args.window_size}S{args.sliding_step}.h5'
+    )
+    if model_path.exists():
+        logger.info('Loading model weights from %s ...', str(model_path))
+        model.load_weights(str(model_path), by_name=True, skip_mismatch=True)
+    else:
+        logger.info('Initializing random weights for the model %s ...', model.name)
+    return model, model_path
+
+
 if __name__ == '__main__':
     main_parser = ArgumentParser(description='Command-line text diacritics restoration tool.')
     subparsers = main_parser.add_subparsers(title='Commands', description='Available operations:',  dest='subcommand')
@@ -75,10 +93,19 @@ if __name__ == '__main__':
     test_parser.add_argument('--sliding-step', type=int, default=DEFAULT_SLIDING_STEP,
                              help='The number of characters to skip to generate between the start of two consecutive'
                                   ' windows.')
-    # diacritization_parser = subparsers.add_parser('diacritize', help='Diacritize some text.')
-    # diacritization_parser.add_argument('--text', default='', help='Undiacritized text.')
-    # diacritization_parser.add_argument('--params-dir', '-p', type=Path, default=DEFAULT_PARAMS_DIR,
-    #                                    help='Directory containing the model parameters.')
+    diacritization_parser = subparsers.add_parser('diacritization', help='Diacritize some text.')
+    diacritization_parser.add_argument('--text', default='', help='Undiacritized text.')
+    diacritization_parser.add_argument('--params-dir', '-p', type=Path, default=DEFAULT_PARAMS_DIR,
+                                       help='The directory where the model parameters are stored.')
+    diacritization_parser.add_argument('--embedding-size', type=int, default=DEFAULT_EMBEDDING_SIZE,
+                                       help='The size of the embedding layer.')
+    diacritization_parser.add_argument('--lstm-size', type=int, default=DEFAULT_LSTM_SIZE,
+                                       help='The size of the lstm layers.')
+    diacritization_parser.add_argument('--window-size', type=int, default=DEFAULT_WINDOW_SIZE,
+                                       help='The number of characters in a single instance of the data.')
+    diacritization_parser.add_argument('--sliding-step', type=int, default=DEFAULT_SLIDING_STEP,
+                                       help='The number of characters to skip to generate between the start of two '
+                                            'consecutive windows.')
     args = main_parser.parse_args()
     if args.subcommand == 'download-dataset':
         data_dir = args.data_dir.expanduser()
@@ -95,10 +122,7 @@ if __name__ == '__main__':
                                                 TensorBoard)
         from multilevel_diacritizer.model import MultiLevelDiacritizer
 
-        model = MultiLevelDiacritizer(window_size=args.window_size, lstm_size=args.lstm_size,
-                                      dropout_rate=args.dropout_rate, embedding_size=args.embedding_size,
-                                      test_der=args.calculate_der, test_wer=args.calculate_wer)
-        model.summary(positions=[.45, .6, .75, 1.], print_fn=logger.info)
+        model, model_path = get_loaded_model(args)
 
         logger.info('Loading the training data...')
         train_set = MultiLevelDiacritizer.get_processed_window_dataset(
@@ -109,21 +133,6 @@ if __name__ == '__main__':
         val_set = MultiLevelDiacritizer.get_processed_window_dataset(
             [str(x) for x in args.val_file], args.batch_size, args.window_size, args.sliding_step
         )
-
-        args.params_dir.mkdir(parents=True, exist_ok=True)
-        model.compile(RMSprop(0.001),
-                      [SparseCategoricalCrossentropy(from_logits=True, name='primary_loss'),
-                       SparseCategoricalCrossentropy(from_logits=True, name='secondary_loss'),
-                       BinaryCrossentropy(from_logits=True, name='shadda_loss'),
-                       BinaryCrossentropy(from_logits=True, name='sukoon_loss')])
-        model_path = args.params_dir / Path(
-            f'{model.name}-E{args.embedding_size}L{args.lstm_size}W{args.window_size}S{args.sliding_step}.h5'
-        )
-        if model_path.exists():
-            logger.info('Loading model weights from %s ...', str(model_path))
-            model.load_weights(str(model_path), by_name=True, skip_mismatch=True)
-        else:
-            logger.info('Initializing random weights for the model %s ...', model.name)
 
         last_epoch_path = args.params_dir / Path('last_epoch.txt')
 
@@ -150,7 +159,11 @@ if __name__ == '__main__':
             )
             return predicted, real
 
-
+        model.compile(RMSprop(0.001),
+                      [SparseCategoricalCrossentropy(from_logits=True, name='primary_loss'),
+                       SparseCategoricalCrossentropy(from_logits=True, name='secondary_loss'),
+                       BinaryCrossentropy(from_logits=True, name='shadda_loss'),
+                       BinaryCrossentropy(from_logits=True, name='sukoon_loss')])
         model.fit(train_set['dataset'].repeat(), steps_per_epoch=train_set['size'], epochs=args.epochs,
                   initial_epoch=get_initial_epoch(),
                   validation_data=val_set['dataset'].repeat(), validation_steps=val_set['size'],
@@ -170,25 +183,13 @@ if __name__ == '__main__':
         from multilevel_diacritizer.model import MultiLevelDiacritizer
         from multilevel_diacritizer.metrics import DiacritizationErrorRate, WordErrorRate
 
-        model = MultiLevelDiacritizer(window_size=args.window_size, lstm_size=args.lstm_size,
-                                      embedding_size=args.embedding_size)
-        model.summary(positions=[.45, .6, .75, 1.], print_fn=logger.info)
+        args.dropout_rate = 0
+        model, model_path = get_loaded_model(args)
 
         logger.info('Loading the testing data...')
         test_set = MultiLevelDiacritizer.get_processed_window_dataset(
             [str(x) for x in args.test_file], args.batch_size, args.window_size, args.sliding_step
         )
-
-        args.params_dir.mkdir(parents=True, exist_ok=True)
-        model_path = args.params_dir / Path(
-            f'{model.name}-E{args.embedding_size}L{args.lstm_size}W{args.window_size}S{args.sliding_step}.h5'
-        )
-        if model_path.exists():
-            logger.info('Loading model weights from %s ...', str(model_path))
-            model.load_weights(str(model_path), by_name=True, skip_mismatch=True)
-        else:
-            logger.warning('Weights file for the selected model is not found in %s.'
-                           ' The model weights are initialized randomly.', str(model_path.parent))
 
         der = tf.Variable(0.0)
         wer = tf.Variable(0.0)
@@ -209,7 +210,15 @@ if __name__ == '__main__':
             count.assign_add(1)
             logger.info('Batch %d/%d: DER = %f | WER = %f', i, test_set['size'],
                         (der / count).numpy(), (wer / count).numpy())
-        logger.info('DER = %f', (der / count).numpy())
-        logger.info('WER = %f', (wer / count).numpy())
+        print('DER = %f', (der / count).numpy())
+        print('WER = %f', (wer / count).numpy())
+    elif args.subcommand == 'diacritization':
+        from multilevel_diacritizer.model import MultiLevelDiacritizer
+
+        args.dropout_rate = 0
+        args.calculate_der = False
+        args.calculate_wer = False
+        model, model_path = get_loaded_model(args)
+        print(model.diacritize(args.text, args.window_size, args.sliding_step))
     else:
         main_parser.print_help()

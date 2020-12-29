@@ -8,7 +8,9 @@ SECONDARY_DIACRITICS = sorted('ًٌٍ')
 SHADDA = 'ّ'
 SUKOON = 'ْ'
 ARABIC_LETTERS = frozenset([chr(x) for x in (list(range(0x0621, 0x63B)) + list(range(0x0641, 0x064B)))])
+ARABIC_PATTERN = re.compile(r'[%s]' % ''.join(ARABIC_LETTERS))
 DIACRITICS = frozenset(PRIMARY_DIACRITICS + SECONDARY_DIACRITICS + [SHADDA, SUKOON])
+DIACRITICS_PATTERN = re.compile(r'[%s]' % ''.join(DIACRITICS))
 NUMBER = '0'
 NUMBER_PATTERN = re.compile(r'\d+(?:\.\d+)?')
 
