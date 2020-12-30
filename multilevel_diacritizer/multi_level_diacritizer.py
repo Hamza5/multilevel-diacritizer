@@ -11,7 +11,8 @@ tf.config.experimental.set_memory_growth(physical_devices[0], enable=True)
 from multilevel_diacritizer.constants import (
     DATASET_FILE_NAME, DEFAULT_DATA_DIR, DEFAULT_PARAMS_DIR, DEFAULT_TRAIN_STEPS, DEFAULT_BATCH_SIZE,
     DEFAULT_EARLY_STOPPING_STEPS, DEFAULT_WINDOW_SIZE, DEFAULT_SLIDING_STEP, DEFAULT_MONITOR_METRIC,
-    DEFAULT_EMBEDDING_SIZE, DEFAULT_LSTM_SIZE, DEFAULT_DROPOUT_RATE
+    DEFAULT_EMBEDDING_SIZE, DEFAULT_LSTM_SIZE, DEFAULT_DROPOUT_RATE, SENTENCE_TOKENIZATION_REGEXP, SENTENCE_SEPARATORS,
+    DIACRITICS_PATTERN
 )
 
 basicConfig(level='INFO', format='%(asctime)s [%(name)s] %(levelname)s: %(message)s', datefmt='%Y-%m-%d %I:%M:%S %p')
@@ -219,6 +220,20 @@ if __name__ == '__main__':
         args.calculate_der = False
         args.calculate_wer = False
         model, model_path = get_loaded_model(args)
-        print(model.diacritize(args.text, args.window_size, args.sliding_step))
+        u_text = DIACRITICS_PATTERN.sub('', args.text)
+        fragments = list(filter(None, SENTENCE_TOKENIZATION_REGEXP.split(u_text)))
+        sentences = []
+        for s1, s2 in zip(fragments[:-1], fragments[1:]):
+            if s2 in SENTENCE_SEPARATORS:
+                sentences.append(s1 + s2)
+            elif s1 not in SENTENCE_SEPARATORS:
+                sentences.append(s1)
+        if fragments[-1] not in SENTENCE_SEPARATORS:
+            sentences.append(fragments[-1])
+        d_sentences, u_sentences = model.diacritize(sentences, args.window_size, args.sliding_step)
+        d_text = u_text
+        for d_sentence, u_sentence in zip(d_sentences, u_sentences):
+            d_text = d_text.replace(u_sentence, d_sentence)
+        print(d_text)
     else:
         main_parser.print_help()

@@ -13,7 +13,8 @@ DIACRITICS = frozenset(PRIMARY_DIACRITICS + SECONDARY_DIACRITICS + [SHADDA, SUKO
 DIACRITICS_PATTERN = re.compile(r'[%s]' % ''.join(DIACRITICS))
 NUMBER = '0'
 NUMBER_PATTERN = re.compile(r'\d+(?:\.\d+)?')
-
+SENTENCE_SEPARATORS = ';,،؛.:؟!'
+SENTENCE_TOKENIZATION_REGEXP = re.compile(r'([' + SENTENCE_SEPARATORS + r'])(?!\w)')
 
 DATASET_FILE_NAME = 'Tashkeela-processed.zip'
 DEFAULT_WINDOW_SIZE = 32
