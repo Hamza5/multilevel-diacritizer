@@ -16,7 +16,7 @@ from multilevel_diacritizer.constants import (
     DIACRITICS_PATTERN
 )
 
-basicConfig(level='INFO', format='%(asctime)s [%(name)s] %(levelname)s: %(message)s', datefmt='%Y-%m-%d %I:%M:%S %p')
+basicConfig(level='INFO', format='%(asctime)s [%(name)s] %(levelname)s: %(message)s', datefmt='%Y-%m-%d %H:%M:%S')
 logger = getLogger(__name__)
 
 
@@ -44,7 +44,7 @@ def get_loaded_model(args):
         logger.info('Loading model weights from %s ...', str(model_path))
         model.load_weights(str(model_path), by_name=True, skip_mismatch=True)
     else:
-        logger.info('Initializing random weights for the model %s ...', model.name)
+        logger.warning('Initializing random weights for the model %s ...', model.name)
     return model, model_path
 
 
@@ -101,10 +101,12 @@ if __name__ == '__main__':
 
     diacritization_parser = subparsers.add_parser('diacritization', help='Diacritize some text.',
                                                   parents=[common_args_parser])
-    input_group = diacritization_parser.add_mutually_exclusive_group()
-    input_group.add_argument('--text', default='', help='Undiacritized text.')
-    input_group.add_argument('--file', type=FileType('rt', encoding='UTF-8'), default=sys.stdin,
-                             help='File containing undiacritized text.')
+    input_group = diacritization_parser.add_mutually_exclusive_group(required=True)
+    input_group.add_argument('--text', '-t', default='', help='Undiacritized text.')
+    input_group.add_argument('--file', '-f', type=FileType('rt', encoding='UTF-8'), default=sys.stdin,
+                             help='The path of the file containing undiacritized arabic text.')
+    diacritization_parser.add_argument('--out-file', '-o', type=FileType('wt', encoding='UTF-8'), default=sys.stdout,
+                                       help='The path of the generated file containing the arabic text diacritized.')
 
     args = main_parser.parse_args()
     if args.subcommand == 'download-dataset':
@@ -207,26 +209,46 @@ if __name__ == '__main__':
         print('DER = %f', (der / count).numpy())
         print('WER = %f', (wer / count).numpy())
     elif args.subcommand == 'diacritization':
+        from concurrent.futures import ThreadPoolExecutor
         from multilevel_diacritizer.model import MultiLevelDiacritizer
 
         args.dropout_rate = 0
         args.calculate_der = False
         args.calculate_wer = False
         model, model_path = get_loaded_model(args)
-        u_text = DIACRITICS_PATTERN.sub('', args.text)
+        u_text = DIACRITICS_PATTERN.sub('', args.text or args.file.read())
         fragments = list(filter(None, SENTENCE_TOKENIZATION_REGEXP.split(u_text)))
-        sentences = []
+        u_sentences = []
         for s1, s2 in zip(fragments[:-1], fragments[1:]):
             if s2 in SENTENCE_SEPARATORS:
-                sentences.append(s1 + s2)
+                u_sentences.append(s1 + s2)
             elif s1 not in SENTENCE_SEPARATORS:
-                sentences.append(s1)
+                u_sentences.append(s1)
         if fragments[-1] not in SENTENCE_SEPARATORS:
-            sentences.append(fragments[-1])
-        d_sentences, u_sentences = model.diacritize(sentences, args.window_size, args.sliding_step)
+            u_sentences.append(fragments[-1])
+
+        def insert_d_words(u_sentence, d_words):
+            assert isinstance(u_sentence, str)
+            start_index = 0
+            d_sentence = u_sentence
+            for d_word in d_words:
+                d_word = d_word.numpy().decode('UTF-8')
+                u_word = DIACRITICS_PATTERN.sub('', d_word)
+                d_sentence = d_sentence[:start_index] + d_sentence[start_index:].replace(u_word, d_word)
+                start_index += d_sentence.find(d_word, start_index) + len(d_word) + 1
+            return d_sentence
+
+        logger.info('Diacritizing...')
+        d_sentence_words = model.diacritize_words(u_sentences, args.window_size, args.sliding_step)
+
+        with ThreadPoolExecutor() as p:
+            d_sentences = p.map(insert_d_words, u_sentences, d_sentence_words)
+
         d_text = u_text
         for d_sentence, u_sentence in zip(d_sentences, u_sentences):
             d_text = d_text.replace(u_sentence, d_sentence)
-        print(d_text)
+        print(d_text, file=args.out_file)
+        args.out_file.close()
+        logger.info('Done')
     else:
         main_parser.print_help()

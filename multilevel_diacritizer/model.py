@@ -208,7 +208,7 @@ class MultiLevelDiacritizer(Model):
         ).numpy().decode('UTF-8')
         return real
 
-    def diacritize(self, sentences, window_size, sliding_step):
+    def diacritize_words(self, sentences, window_size, sliding_step):
         dataset = tf.data.Dataset.from_tensor_slices(sentences).map(self.clean_and_encode_sentence)
         dataset = dataset.concatenate(tf.data.Dataset.from_tensor_slices((
             tf.zeros((1, sliding_step), tf.int32),
@@ -217,22 +217,6 @@ class MultiLevelDiacritizer(Model):
         dataset = self.make_window_dataset(dataset, window_size, sliding_step)
         dataset = dataset.map(lambda x, y: x)
 
-        def diac_word(u_sentence__index, d_word):
-            u_sentence, index = u_sentence__index
-            u_word = tf.strings.regex_replace(d_word, DIACRITICS_PATTERN.pattern, '')
-            past_part = tf.strings.substr(u_sentence, 0, index, unit='UTF8_CHAR')
-            diac_part = tf.strings.regex_replace(
-                tf.strings.substr(u_sentence, index, tf.strings.length(u_sentence) - index, unit="UTF8_CHAR"),
-                u_word, d_word, replace_global=False
-            )
-            r = tf.strings.join((past_part, diac_part))
-            return r, index + tf.strings.length(d_word, unit='UTF8_CHAR') + 1
-
-        def diac_sentence(u_sentence__d_cleaned_words):
-            u_sentence, d_cleaned_words = u_sentence__d_cleaned_words
-            return tf.foldl(diac_word, d_cleaned_words, initializer=(u_sentence, 0))[0]
-
-        u_sentences = tf.strings.regex_replace(sentences, DIACRITICS_PATTERN.pattern, '')
         d_cleaned_sentences_words = tf.strings.split(
             tf.strings.split(
                 tf.strings.regex_replace(
@@ -244,5 +228,4 @@ class MultiLevelDiacritizer(Model):
                 ), '|'
             )
         )
-        d_sentences = tf.map_fn(diac_sentence, (u_sentences, d_cleaned_sentences_words), fn_output_signature=tf.string)
-        return [s.numpy().decode('UTF-8') for s in d_sentences], [s.numpy().decode('UTF-8') for s in u_sentences]
+        return d_cleaned_sentences_words
