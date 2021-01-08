@@ -4,7 +4,7 @@ from tensorflow.keras import Model, Input
 from tensorflow.keras.layers import Embedding, LSTM, Dense, Bidirectional
 
 from multilevel_diacritizer.constants import (
-    NUMBER, NUMBER_PATTERN, DIACRITICS, PRIMARY_DIACRITICS, SECONDARY_DIACRITICS, SHADDA, SUKOON, DEFAULT_WINDOW_SIZE,
+    DIGIT, DIGIT_PATTERN, DIACRITICS, PRIMARY_DIACRITICS, SECONDARY_DIACRITICS, SHADDA, SUKOON, DEFAULT_WINDOW_SIZE,
     DEFAULT_EMBEDDING_SIZE, DEFAULT_LSTM_SIZE, DEFAULT_DROPOUT_RATE, CHARS, DECODE_LETTERS_TABLE, DECODE_PRIMARY_TABLE,
     DECODE_SECONDARY_TABLE, DECODE_SHADDA_TABLE, DECODE_SUKOON_TABLE, ENCODE_LETTERS_TABLE, ENCODE_PRIMARY_TABLE,
     ENCODE_SECONDARY_TABLE, ENCODE_BINARY_TABLE, DIACRITICS_PATTERN
@@ -49,10 +49,19 @@ class MultiLevelDiacritizer(Model):
 
     @staticmethod
     def normalize_entities(text):
-        return tf.strings.strip(tf.strings.regex_replace(tf.strings.regex_replace(tf.strings.regex_replace(
-            tf.strings.regex_replace(text, NUMBER_PATTERN.pattern, NUMBER),
-            r'([^\p{Arabic}\p{P}\d\s' + ''.join(DIACRITICS) + '])+', ''),
-            r'\p{P}+', ''), r'\s{2,}', ' '))
+        return tf.strings.strip(
+            tf.strings.regex_replace(
+                tf.strings.regex_replace(
+                    tf.strings.regex_replace(
+                        tf.strings.regex_replace(
+                            text, DIGIT_PATTERN.pattern, DIGIT
+                        ),
+                        r'([^\p{Arabic}\p{P}\d\s' + ''.join(DIACRITICS) + '])+', ''
+                    ),
+                    r'\p{P}+', ''
+                ), r'\s{2,}', ' '
+            )
+        )
 
     @staticmethod
     def separate_diacritics(diacritized_text):
@@ -110,9 +119,10 @@ class MultiLevelDiacritizer(Model):
             tf.zeros((1, sliding_step), tf.int32),
             tuple(tf.zeros((1, sliding_step), tf.int32) for _ in range(4))
         )))
-        dataset = cls.make_window_dataset(dataset, window_size, sliding_step).batch(batch_size)
+        dataset = cls.make_window_dataset(dataset, window_size, sliding_step).batch(batch_size)\
+            .prefetch(tf.data.experimental.AUTOTUNE)
         size = dataset.reduce(0, lambda old, new: old + 1).numpy()
-        return {'dataset': dataset.prefetch(tf.data.experimental.AUTOTUNE), 'size': size}
+        return {'dataset': dataset, 'size': size}
 
     @staticmethod
     def combine_diacritics(primary_diacritics, secondary_diacritics, shadda_diacritics, sukoon_diacritics):
@@ -226,8 +236,11 @@ class MultiLevelDiacritizer(Model):
         d_cleaned_sentences_words = tf.strings.split(
             tf.strings.split(
                 tf.strings.regex_replace(
-                    self.predict_sentence_from_input_batch(np.vstack(tuple(dataset.as_numpy_iterator())), sliding_step),
-                    r'\|+$', ''
+                    tf.strings.regex_replace(
+                        self.predict_sentence_from_input_batch(np.vstack(tuple(dataset.as_numpy_iterator())),
+                                                               sliding_step),
+                        r'\|[%s]+' % ''.join(DIACRITICS), '|'
+                    ), r'\|+$', ''
                 ), '|'
             )
         )

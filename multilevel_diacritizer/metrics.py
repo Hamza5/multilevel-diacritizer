@@ -1,6 +1,6 @@
 import tensorflow as tf
 
-from multilevel_diacritizer.constants import NUMBER, ENCODE_LETTERS_TABLE
+from multilevel_diacritizer.constants import DIGIT, ENCODE_LETTERS_TABLE
 
 
 class ErrorRate(tf.keras.metrics.Metric):
@@ -27,7 +27,7 @@ class DiacritizationErrorRate(ErrorRate):
     def char_acc(y_true__y_pred__x):
         y_true, y_pred, x = y_true__y_pred__x
         letters_positions = tf.reduce_all(
-            x != tf.reshape(tf.concat(([0], ENCODE_LETTERS_TABLE.lookup(tf.constant([' ', NUMBER]))), axis=0), (-1, 1)),
+            x != tf.reshape(tf.concat(([0], ENCODE_LETTERS_TABLE.lookup(tf.constant([' ', DIGIT]))), axis=0), (-1, 1)),
             axis=0)
         return tf.reduce_mean(tf.cast(y_true[letters_positions] == y_pred[letters_positions], tf.float32))
 
@@ -45,7 +45,7 @@ class WordErrorRate(ErrorRate):
         def count_correct_words(last_state, y_true__y_pred__x):
             y_true, y_pred, x = y_true__y_pred__x
             last_was_letter, comparison, words_count, correct_count = last_state
-            if x > ENCODE_LETTERS_TABLE.lookup(tf.constant(NUMBER)):
+            if x > ENCODE_LETTERS_TABLE.lookup(tf.constant(DIGIT)):
                 comparison = tf.logical_and(comparison, y_true == y_pred)
                 last_was_letter = tf.logical_or(last_was_letter, True)
             elif last_was_letter:

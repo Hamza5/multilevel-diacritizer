@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
-from argparse import ArgumentParser
+import sys
+from argparse import ArgumentParser, FileType
 from logging import getLogger, basicConfig
 from pathlib import Path
 
@@ -17,6 +18,17 @@ from multilevel_diacritizer.constants import (
 
 basicConfig(level='INFO', format='%(asctime)s [%(name)s] %(levelname)s: %(message)s', datefmt='%Y-%m-%d %I:%M:%S %p')
 logger = getLogger(__name__)
+
+
+def get_dataset_from(data_paths, args):
+    files_names = []
+    for path in data_paths:
+        if path.is_dir():
+            files_names.extend(str(x) for x in path.iterdir())
+        else:
+            files_names.append(str(path))
+    return MultiLevelDiacritizer.get_processed_window_dataset(files_names, args.batch_size, args.window_size,
+                                                              args.sliding_step)
 
 
 def get_loaded_model(args):
@@ -39,34 +51,38 @@ def get_loaded_model(args):
 if __name__ == '__main__':
     main_parser = ArgumentParser(description='Command-line text diacritics restoration tool.')
     subparsers = main_parser.add_subparsers(title='Commands', description='Available operations:',  dest='subcommand')
+
     data_parser = subparsers.add_parser('download-dataset', help='Get and extract the data of training and testing.')
     data_parser.add_argument('--data-dir', '-d', type=Path, default=DEFAULT_DATA_DIR,
                              help='Directory used for downloading and extracting the dataset.')
     data_parser.add_argument('--url', '-u', help='URL of the Tashkeela-processed dataset or any other dataset written'
                                                  ' in the same format.',
                              default='https://sourceforge.net/projects/tashkeela-processed/files/latest/download')
-    train_parser = subparsers.add_parser('train', help='Train the model on a dataset.')
-    train_parser.add_argument('--train-file', '-t', type=Path, required=True, action='append',
-                              help='The file(s) containing the training data.')
-    train_parser.add_argument('--val-file', '-v', type=Path, required=True, action='append',
-                              help='The file(s) containing the validation data.')
-    train_parser.add_argument('--params-dir', '-p', type=Path, default=DEFAULT_PARAMS_DIR,
-                              help='Directory used to store the model parameters.')
+
+    common_args_parser = ArgumentParser(add_help=False)
+    common_args_parser.add_argument('--params-dir', '-p', type=Path, default=DEFAULT_PARAMS_DIR,
+                                    help='Directory used to store the model parameters.')
+    common_args_parser.add_argument('--batch-size', '-b', type=int, default=DEFAULT_BATCH_SIZE,
+                                    help='Maximum number of elements in a single batch.')
+    common_args_parser.add_argument('--embedding-size', type=int, default=DEFAULT_EMBEDDING_SIZE,
+                                    help='The size of the embedding layer.')
+    common_args_parser.add_argument('--lstm-size', type=int, default=DEFAULT_LSTM_SIZE,
+                                    help='The size of the lstm layers.')
+    common_args_parser.add_argument('--window-size', type=int, default=DEFAULT_WINDOW_SIZE,
+                                    help='The number of characters in a single instance of the data.')
+    common_args_parser.add_argument('--sliding-step', type=int, default=DEFAULT_SLIDING_STEP,
+                                    help='The number of characters to skip to generate between the start of two '
+                                         'consecutive windows.')
+
+    train_parser = subparsers.add_parser('train', help='Train the model on a dataset.', parents=[common_args_parser])
+    train_parser.add_argument('--train-data', '-t', type=Path, required=True, action='append',
+                              help='The file or directory containing the training data.')
+    train_parser.add_argument('--val-data', '-v', type=Path, required=True, action='append',
+                              help='The file or directory containing the validation data.')
     train_parser.add_argument('--epochs', '-e', type=int, default=DEFAULT_TRAIN_STEPS,
                               help='Maximum number of iterations before stopping the training process.')
-    train_parser.add_argument('--batch-size', '-b', type=int, default=DEFAULT_BATCH_SIZE,
-                              help='Maximum number of elements in a single batch.')
-    train_parser.add_argument('--embedding-size', type=int, default=DEFAULT_EMBEDDING_SIZE,
-                              help='The size of the embedding layer.')
-    train_parser.add_argument('--lstm-size', type=int, default=DEFAULT_LSTM_SIZE,
-                              help='The size of the lstm layers.')
     train_parser.add_argument('--dropout-rate', type=float, default=DEFAULT_DROPOUT_RATE,
                               help='The rate of the dropout.')
-    train_parser.add_argument('--window-size', type=int, default=DEFAULT_WINDOW_SIZE,
-                              help='The number of characters in a single instance of the data.')
-    train_parser.add_argument('--sliding-step', type=int, default=DEFAULT_SLIDING_STEP,
-                              help='The number of characters to skip to generate between the start of two consecutive'
-                                   ' windows.')
     train_parser.add_argument('--monitor-metric', '-m', default=DEFAULT_MONITOR_METRIC,
                               help='The metric to monitor to estimate the model performance when saving its weights and'
                                    ' for early stopping.')
@@ -78,35 +94,18 @@ if __name__ == '__main__':
                                    ' iteration.')
     train_parser.add_argument('--calculate-wer', '-w', action='store_true',
                               help='Calculate the Word Error Rate on the validation dataset after each iteration.')
-    test_parser = subparsers.add_parser('test', help='Test the model on a dataset.')
-    test_parser.add_argument('--test-file', '-t', type=Path, required=True, action='append',
-                             help='The file(s) containing the testing data.')
-    test_parser.add_argument('--params-dir', '-p', type=Path, default=DEFAULT_PARAMS_DIR,
-                             help='The directory where the model parameters are stored.')
-    test_parser.add_argument('--batch-size', '-b', type=int, default=DEFAULT_BATCH_SIZE,
-                             help='Maximum number of elements in a single batch.')
-    test_parser.add_argument('--embedding-size', type=int, default=DEFAULT_EMBEDDING_SIZE,
-                             help='The size of the embedding layer.')
-    test_parser.add_argument('--lstm-size', type=int, default=DEFAULT_LSTM_SIZE,
-                             help='The size of the lstm layers.')
-    test_parser.add_argument('--window-size', type=int, default=DEFAULT_WINDOW_SIZE,
-                             help='The number of characters in a single instance of the data.')
-    test_parser.add_argument('--sliding-step', type=int, default=DEFAULT_SLIDING_STEP,
-                             help='The number of characters to skip to generate between the start of two consecutive'
-                                  ' windows.')
-    diacritization_parser = subparsers.add_parser('diacritization', help='Diacritize some text.')
-    diacritization_parser.add_argument('--text', default='', help='Undiacritized text.')
-    diacritization_parser.add_argument('--params-dir', '-p', type=Path, default=DEFAULT_PARAMS_DIR,
-                                       help='The directory where the model parameters are stored.')
-    diacritization_parser.add_argument('--embedding-size', type=int, default=DEFAULT_EMBEDDING_SIZE,
-                                       help='The size of the embedding layer.')
-    diacritization_parser.add_argument('--lstm-size', type=int, default=DEFAULT_LSTM_SIZE,
-                                       help='The size of the lstm layers.')
-    diacritization_parser.add_argument('--window-size', type=int, default=DEFAULT_WINDOW_SIZE,
-                                       help='The number of characters in a single instance of the data.')
-    diacritization_parser.add_argument('--sliding-step', type=int, default=DEFAULT_SLIDING_STEP,
-                                       help='The number of characters to skip to generate between the start of two '
-                                            'consecutive windows.')
+
+    test_parser = subparsers.add_parser('test', help='Test the model on a dataset.', parents=[common_args_parser])
+    test_parser.add_argument('--test-data', '-t', type=Path, required=True, action='append',
+                             help='The file or directory containing the testing data.')
+
+    diacritization_parser = subparsers.add_parser('diacritization', help='Diacritize some text.',
+                                                  parents=[common_args_parser])
+    input_group = diacritization_parser.add_mutually_exclusive_group()
+    input_group.add_argument('--text', default='', help='Undiacritized text.')
+    input_group.add_argument('--file', type=FileType('rt', encoding='UTF-8'), default=sys.stdin,
+                             help='File containing undiacritized text.')
+
     args = main_parser.parse_args()
     if args.subcommand == 'download-dataset':
         data_dir = args.data_dir.expanduser()
@@ -126,14 +125,10 @@ if __name__ == '__main__':
         model, model_path = get_loaded_model(args)
 
         logger.info('Loading the training data...')
-        train_set = MultiLevelDiacritizer.get_processed_window_dataset(
-            [str(x) for x in args.train_file], args.batch_size, args.window_size, args.sliding_step
-        )
+        train_set = get_dataset_from(args.train_data, args)
 
         logger.info('Loading the validation data...')
-        val_set = MultiLevelDiacritizer.get_processed_window_dataset(
-            [str(x) for x in args.val_file], args.batch_size, args.window_size, args.sliding_step
-        )
+        val_set = get_dataset_from(args.val_data, args)
 
         last_epoch_path = args.params_dir / Path('last_epoch.txt')
 
@@ -173,7 +168,7 @@ if __name__ == '__main__':
                              EarlyStopping(monitor=args.monitor_metric, patience=args.early_stopping_epochs, verbose=1),
                              LambdaCallback(
                                  on_epoch_end=lambda epoch, logs: logger.info(
-                                     '\nPredicted diacritization: %s\nReal diacritization: %s',
+                                     '\nPred: %s\nReal: %s',
                                      *get_diacritization_preview(val_set, args.sliding_step, model, 100)
                                  )
                              ), LambdaCallback(on_epoch_end=write_epoch), TensorBoard()
@@ -188,9 +183,7 @@ if __name__ == '__main__':
         model, model_path = get_loaded_model(args)
 
         logger.info('Loading the testing data...')
-        test_set = MultiLevelDiacritizer.get_processed_window_dataset(
-            [str(x) for x in args.test_file], args.batch_size, args.window_size, args.sliding_step
-        )
+        test_set = get_dataset_from(args.test_data, args)
 
         der = tf.Variable(0.0)
         wer = tf.Variable(0.0)
