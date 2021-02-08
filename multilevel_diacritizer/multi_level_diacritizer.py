@@ -101,10 +101,8 @@ if __name__ == '__main__':
 
     diacritization_parser = subparsers.add_parser('diacritization', help='Diacritize some text.',
                                                   parents=[common_args_parser])
-    input_group = diacritization_parser.add_mutually_exclusive_group(required=True)
-    input_group.add_argument('--text', '-t', default='', help='Undiacritized text.')
-    input_group.add_argument('--file', '-f', type=FileType('rt', encoding='UTF-8'), default=sys.stdin,
-                             help='The path of the file containing undiacritized arabic text.')
+    diacritization_parser.add_argument('--file', '-f', type=FileType('rt', encoding='UTF-8'), default=sys.stdin,
+                                       help='The path of the file containing undiacritized arabic text.')
     diacritization_parser.add_argument('--out-file', '-o', type=FileType('wt', encoding='UTF-8'), default=sys.stdout,
                                        help='The path of the generated file containing the arabic text diacritized.')
 
@@ -216,16 +214,25 @@ if __name__ == '__main__':
         args.calculate_der = False
         args.calculate_wer = False
         model, model_path = get_loaded_model(args)
-        u_text = DIACRITICS_PATTERN.sub('', args.text or args.file.read())
-        fragments = list(filter(None, SENTENCE_TOKENIZATION_REGEXP.split(u_text)))
-        u_sentences = []
-        for s1, s2 in zip(fragments[:-1], fragments[1:]):
-            if s2 in SENTENCE_SEPARATORS:
-                u_sentences.append(s1 + s2)
-            elif s1 not in SENTENCE_SEPARATORS:
-                u_sentences.append(s1)
-        if fragments[-1] not in SENTENCE_SEPARATORS:
-            u_sentences.append(fragments[-1])
+
+        def read_lines_at_once(file, num_lines):
+            for line in file:
+                u_text = DIACRITICS_PATTERN.sub('', line)
+                for _, line in zip(range(1, num_lines), file):
+                    u_text += line
+                yield u_text
+
+        def get_sentences(u_text):
+            fragments = list(filter(None, SENTENCE_TOKENIZATION_REGEXP.split(u_text)))
+            u_sentences = []
+            for s1, s2 in zip(fragments[:-1], fragments[1:]):
+                if s2 in SENTENCE_SEPARATORS:
+                    u_sentences.append(s1 + s2)
+                elif s1 not in SENTENCE_SEPARATORS:
+                    u_sentences.append(s1)
+            if fragments and fragments[-1] not in SENTENCE_SEPARATORS:
+                u_sentences.append(fragments[-1])
+            return u_sentences
 
         def insert_d_words(u_sentence, d_words):
             assert isinstance(u_sentence, str)
@@ -234,20 +241,21 @@ if __name__ == '__main__':
             for d_word in d_words:
                 d_word = d_word.numpy().decode('UTF-8')
                 u_word = DIACRITICS_PATTERN.sub('', d_word)
-                d_sentence = d_sentence[:start_index] + d_sentence[start_index:].replace(u_word, d_word)
-                start_index += d_sentence.find(d_word, start_index) + len(d_word) + 1
+                d_sentence = d_sentence[:start_index] + d_sentence[start_index:].replace(u_word, d_word, 1)
+                start_index = d_sentence.find(d_word, start_index) + len(d_word)
             return d_sentence
 
         logger.info('Diacritizing...')
-        d_sentence_words = model.diacritize_words(u_sentences, args.window_size, args.sliding_step)
-
-        with ThreadPoolExecutor() as p:
-            d_sentences = p.map(insert_d_words, u_sentences, d_sentence_words)
-
-        d_text = u_text
-        for d_sentence, u_sentence in zip(d_sentences, u_sentences):
-            d_text = d_text.replace(u_sentence, d_sentence)
-        print(d_text, file=args.out_file)
+        for text in read_lines_at_once(args.file, 10):
+            u_sentences = get_sentences(text)
+            d_sentence_words = model.diacritize_words(u_sentences, args.window_size, args.sliding_step)
+            with ThreadPoolExecutor() as p:
+                d_sentences = p.map(insert_d_words, u_sentences, d_sentence_words)
+            start_index = 0
+            for d_sentence, u_sentence in zip(d_sentences, u_sentences):
+                text = text[:start_index] + text[start_index:].replace(u_sentence, d_sentence, 1)
+                start_index = text.find(d_sentence, start_index) + len(d_sentence)
+            print(text, end='', file=args.out_file)
         args.out_file.close()
         logger.info('Done')
     else:
