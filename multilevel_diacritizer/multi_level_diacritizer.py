@@ -13,7 +13,7 @@ from multilevel_diacritizer.constants import (
     DATASET_FILE_NAME, DEFAULT_DATA_DIR, DEFAULT_PARAMS_DIR, DEFAULT_TRAIN_STEPS, DEFAULT_BATCH_SIZE,
     DEFAULT_EARLY_STOPPING_STEPS, DEFAULT_WINDOW_SIZE, DEFAULT_SLIDING_STEP, DEFAULT_MONITOR_METRIC,
     DEFAULT_EMBEDDING_SIZE, DEFAULT_LSTM_SIZE, DEFAULT_DROPOUT_RATE, SENTENCE_TOKENIZATION_REGEXP, SENTENCE_SEPARATORS,
-    DIACRITICS_PATTERN
+    DIACRITICS_PATTERN, DEFAULT_DIACRITIZATION_LINES_COUNT
 )
 
 basicConfig(level='INFO', format='%(asctime)s [%(name)s] %(levelname)s: %(message)s', datefmt='%Y-%m-%d %H:%M:%S')
@@ -105,6 +105,8 @@ if __name__ == '__main__':
                                        help='The path of the file containing undiacritized arabic text.')
     diacritization_parser.add_argument('--out-file', '-o', type=FileType('wt', encoding='UTF-8'), default=sys.stdout,
                                        help='The path of the generated file containing the arabic text diacritized.')
+    diacritization_parser.add_argument('--lines-at-once', '-l', type=int, default=DEFAULT_DIACRITIZATION_LINES_COUNT,
+                                       help='Number of lines to diacritize at once.')
 
     args = main_parser.parse_args()
     if args.subcommand == 'download-dataset':
@@ -217,25 +219,22 @@ if __name__ == '__main__':
 
         def read_lines_at_once(file, num_lines):
             for line in file:
-                u_text = DIACRITICS_PATTERN.sub('', line)
+                text = line
                 for _, line in zip(range(1, num_lines), file):
-                    u_text += line
-                yield u_text
+                    text += line
+                yield text
 
-        def get_sentences(u_text):
-            fragments = list(filter(None, SENTENCE_TOKENIZATION_REGEXP.split(u_text)))
+        def get_sentences(text):
+            fragments = list(filter(None, SENTENCE_TOKENIZATION_REGEXP.split(text)))
             u_sentences = []
-            for s1, s2 in zip(fragments[:-1], fragments[1:]):
-                if s2 in SENTENCE_SEPARATORS:
-                    u_sentences.append(s1 + s2)
-                elif s1 not in SENTENCE_SEPARATORS:
-                    u_sentences.append(s1)
-            if fragments and fragments[-1] not in SENTENCE_SEPARATORS:
-                u_sentences.append(fragments[-1])
+            for s in fragments:
+                if s.strip(SENTENCE_SEPARATORS+'\n') != '':
+                    u_sentences.append(s)
+                else:
+                    u_sentences[-1] = u_sentences[-1] + s
             return u_sentences
 
         def insert_d_words(u_sentence, d_words):
-            assert isinstance(u_sentence, str)
             start_index = 0
             d_sentence = u_sentence
             for d_word in d_words:
@@ -246,15 +245,15 @@ if __name__ == '__main__':
             return d_sentence
 
         logger.info('Diacritizing...')
-        for text in read_lines_at_once(args.file, 10):
+        for text in read_lines_at_once(args.file, args.lines_at_once):
+            text = DIACRITICS_PATTERN.sub('', text)
             u_sentences = get_sentences(text)
             d_sentence_words = model.diacritize_words(u_sentences, args.window_size, args.sliding_step)
-            with ThreadPoolExecutor() as p:
-                d_sentences = p.map(insert_d_words, u_sentences, d_sentence_words)
+            d_sentences = list(map(insert_d_words, u_sentences, d_sentence_words))
             start_index = 0
             for d_sentence, u_sentence in zip(d_sentences, u_sentences):
                 text = text[:start_index] + text[start_index:].replace(u_sentence, d_sentence, 1)
-                start_index = text.find(d_sentence, start_index) + len(d_sentence)
+                start_index += len(d_sentence)
             print(text, end='', file=args.out_file)
         args.out_file.close()
         logger.info('Done')
