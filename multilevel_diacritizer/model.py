@@ -4,7 +4,7 @@ from tensorflow.keras import Model, Input
 from tensorflow.keras.layers import Embedding, LSTM, Dense, Bidirectional
 
 from multilevel_diacritizer.constants import (
-    DIGIT, DIGIT_PATTERN, DIACRITICS, PRIMARY_DIACRITICS, SECONDARY_DIACRITICS, SHADDA, SUKOON, DEFAULT_WINDOW_SIZE,
+    DIGIT, DIGIT_PATTERN, DIACRITICS, SHORT_VOWELS, DOUBLE_CASE_ENDINGS, SHADDA, SUKOON, DEFAULT_WINDOW_SIZE,
     DEFAULT_EMBEDDING_SIZE, DEFAULT_LSTM_SIZE, DEFAULT_DROPOUT_RATE, CHARS, DECODE_LETTERS_TABLE, DECODE_PRIMARY_TABLE,
     DECODE_SECONDARY_TABLE, DECODE_SHADDA_TABLE, DECODE_SUKOON_TABLE, ENCODE_LETTERS_TABLE, ENCODE_PRIMARY_TABLE,
     ENCODE_SECONDARY_TABLE, ENCODE_BINARY_TABLE
@@ -85,13 +85,13 @@ class MultiLevelDiacritizer(Model):
         padding = [[0, 1]]
         letters, diacritics = tf.pad(letters, padding), tf.pad(diacritics, padding)
         shadda_diacritics = cls.filter_diacritics(diacritics,
-                                                  [SHADDA + x for x in (PRIMARY_DIACRITICS + SECONDARY_DIACRITICS)] +
+                                                  [SHADDA + x for x in (SHORT_VOWELS + DOUBLE_CASE_ENDINGS)] +
                                                   [SHADDA])
         sukoon_diacritics = cls.filter_diacritics(diacritics, [SUKOON])
         primary_diacritics = cls.filter_diacritics(diacritics,
-                                                   PRIMARY_DIACRITICS + [SHADDA + x for x in PRIMARY_DIACRITICS])
+                                                   SHORT_VOWELS + [SHADDA + x for x in SHORT_VOWELS])
         secondary_diacritics = cls.filter_diacritics(diacritics,
-                                                     SECONDARY_DIACRITICS + [SHADDA + x for x in SECONDARY_DIACRITICS])
+                                                     DOUBLE_CASE_ENDINGS + [SHADDA + x for x in DOUBLE_CASE_ENDINGS])
         encoded_letters = ENCODE_LETTERS_TABLE.lookup(letters)
         encoded_shadda_diacritics = ENCODE_BINARY_TABLE.lookup(shadda_diacritics)
         encoded_sukoon_diacritics = ENCODE_BINARY_TABLE.lookup(sukoon_diacritics)

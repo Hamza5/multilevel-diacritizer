@@ -209,7 +209,6 @@ if __name__ == '__main__':
         print('DER = %f', (der / count).numpy())
         print('WER = %f', (wer / count).numpy())
     elif args.subcommand == 'diacritization':
-        from concurrent.futures import ThreadPoolExecutor
         from multilevel_diacritizer.model import MultiLevelDiacritizer
 
         args.dropout_rate = 0
