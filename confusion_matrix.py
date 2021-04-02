@@ -56,6 +56,12 @@ ax.set_yticks(np.arange(len(confusion_dict)))
 ax.set_xticks(np.arange(len(ys)))
 ax.set_yticklabels([diacritics_names(x) for x in sorted(confusion_dict.keys())], fontname='Arial', fontsize=7)
 ax.set_xticklabels([diacritics_names(x) for x in sorted(ys)], fontname='Arial', fontsize=7)
-plt.setp(ax.get_xticklabels(), rotation=45, ha="right", rotation_mode="anchor")
+ax.xaxis.tick_top()
+ax.xaxis.set_label_position('top')
+plt.setp(ax.get_xticklabels(), rotation=45, ha="left", va='bottom', rotation_mode="anchor")
+for i in range(len(confusion_dict)):
+    for j in range(len(ys)):
+        ax.text(j, i, '{:.1%}'.format(confusion_matrix[i, j]), ha="center", va="center", color="slategrey", fontsize=5)
+
 plt.tight_layout()
 plt.show()
