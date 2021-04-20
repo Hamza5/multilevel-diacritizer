@@ -95,10 +95,6 @@ if __name__ == '__main__':
     train_parser.add_argument('--calculate-wer', '-w', action='store_true',
                               help='Calculate the Word Error Rate on the validation dataset after each iteration.')
 
-    test_parser = subparsers.add_parser('test', help='Test the model on a dataset.', parents=[common_args_parser])
-    test_parser.add_argument('--test-data', '-t', type=Path, required=True, action='append',
-                             help='The file or directory containing the testing data.')
-
     diacritization_parser = subparsers.add_parser('diacritization', help='Diacritize some text.',
                                                   parents=[common_args_parser])
     diacritization_parser.add_argument('--file', '-f', type=FileType('rt', encoding='UTF-8'), default=sys.stdin,
@@ -177,37 +173,6 @@ if __name__ == '__main__':
                              ]
                   )
         logger.info('Training finished.')
-    elif args.subcommand == 'test':
-        from multilevel_diacritizer.model import MultiLevelDiacritizer
-        from multilevel_diacritizer.metrics import DiacritizationErrorRate, WordErrorRate
-
-        args.dropout_rate = 0
-        model, model_path = get_loaded_model(args)
-
-        logger.info('Loading the testing data...')
-        test_set = get_dataset_from(args.test_data, args)
-
-        der = tf.Variable(0.0)
-        wer = tf.Variable(0.0)
-        count = tf.Variable(0.0)
-        logger.info('Calculating DER and WER...')
-        for i, (x, diacs) in test_set['dataset'].enumerate(1):
-            pri_pred, sec_pred, sh_pred, su_pred = model(x)
-            pred_diacs = [
-                MultiLevelDiacritizer.combine_windows(tf.argmax(v, axis=2, output_type=tf.int32), args.sliding_step)
-                for v in model(x)
-            ]
-            x = MultiLevelDiacritizer.combine_windows(x, args.sliding_step)
-            diacs = [MultiLevelDiacritizer.combine_windows(v, args.sliding_step) for v in diacs]
-            diacritics = MultiLevelDiacritizer.decode_encoded_diacritics(diacs)
-            pred_diacritics = MultiLevelDiacritizer.decode_encoded_diacritics(pred_diacs)
-            der.assign_add(1 - DiacritizationErrorRate.char_acc((diacritics, pred_diacritics, x)))
-            wer.assign_add(1 - WordErrorRate.word_acc((diacritics, pred_diacritics, x)))
-            count.assign_add(1)
-            logger.info('Batch %d/%d: DER = %f | WER = %f', i, test_set['size'],
-                        (der / count).numpy(), (wer / count).numpy())
-        print('DER = %f', (der / count).numpy())
-        print('WER = %f', (wer / count).numpy())
     elif args.subcommand == 'diacritization':
         from multilevel_diacritizer.model import MultiLevelDiacritizer
 
