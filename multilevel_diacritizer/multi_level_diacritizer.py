@@ -16,6 +16,8 @@ from multilevel_diacritizer.constants import (
     DIACRITICS_PATTERN, DEFAULT_DIACRITIZATION_LINES_COUNT
 )
 
+from multilevel_diacritizer.model import MultiLevelDiacritizer
+
 basicConfig(level='INFO', format='%(asctime)s [%(name)s] %(levelname)s: %(message)s', datefmt='%Y-%m-%d %H:%M:%S')
 logger = getLogger(__name__)
 
@@ -41,75 +43,133 @@ def get_loaded_model(args):
         f'{model.name}-E{args.embedding_size}L{args.lstm_size}W{args.window_size}S{args.sliding_step}.h5'
     )
     if model_path.exists():
-        logger.info('Loading model weights from %s ...', str(model_path))
         model.load_weights(str(model_path), by_name=True, skip_mismatch=True)
+        logger.info('Model weights loaded from %s ...', str(model_path))
     else:
-        logger.warning('Initializing random weights for the model %s ...', model.name)
+        logger.warning('Random weights initialized for the model %s ...', model.name)
     return model, model_path
 
 
+def get_sentences(text):
+    fragments = list(filter(None, SENTENCE_TOKENIZATION_REGEXP.split(text)))
+    u_sentences = []
+    for s in fragments:
+        if s.strip(SENTENCE_SEPARATORS + '\n') != '':
+            u_sentences.append(s)
+        else:
+            u_sentences[-1] = u_sentences[-1] + s
+    return u_sentences
+
+
+def insert_d_words(u_sentence, d_words):
+    start_index = 0
+    d_sentence = u_sentence
+    for d_word in d_words:
+        d_word = d_word.numpy().decode('UTF-8')
+        u_word = DIACRITICS_PATTERN.sub('', d_word)
+        d_sentence = d_sentence[:start_index] + d_sentence[start_index:].replace(u_word, d_word, 1)
+        start_index = d_sentence.find(d_word, start_index) + len(d_word)
+    return d_sentence
+
+
+def diacritize_text(model, args, text):
+    text = DIACRITICS_PATTERN.sub('', text)
+    u_sentences = get_sentences(text)
+    d_sentence_words = model.diacritize_words(u_sentences, args.window_size, args.sliding_step)
+    d_sentences = list(map(insert_d_words, u_sentences, d_sentence_words))
+    start_index = 0
+    for d_sentence, u_sentence in zip(d_sentences, u_sentences):
+        text = text[:start_index] + text[start_index:].replace(u_sentence, d_sentence, 1)
+        start_index += len(d_sentence)
+    return text
+
+
+def create_server_app(args):
+    from flask import Flask, request, make_response
+
+    args = server_parser.parse_args(args)
+    args.dropout_rate = 0
+    args.calculate_der = False
+    args.calculate_wer = False
+    model, model_path = get_loaded_model(args)
+
+    app = Flask(__name__)
+
+    @app.route('/', methods=['POST'])
+    def home():
+        text = request.get_data(as_text=True)
+        response = make_response(diacritize_text(model, args, text))
+        response.headers['Content-Type'] = 'text/plain; charset=UTF-8'
+        return response
+
+    return app
+
+
+main_parser = ArgumentParser(description='Command-line text diacritics restoration tool.')
+subparsers = main_parser.add_subparsers(title='Commands', description='Available operations:',  dest='subcommand')
+
+data_parser = subparsers.add_parser('download-dataset', help='Get and extract the data of training and testing.')
+data_parser.add_argument('--data-dir', '-d', type=Path, default=DEFAULT_DATA_DIR,
+                         help='Directory used for downloading and extracting the dataset.')
+data_parser.add_argument('--url', '-u', help='URL of the Tashkeela-processed dataset or any other dataset written'
+                                             ' in the same format.',
+                         default='https://sourceforge.net/projects/tashkeela-processed/files/latest/download')
+
+common_args_parser = ArgumentParser(add_help=False)
+common_args_parser.add_argument('--params-dir', '-p', type=Path, default=DEFAULT_PARAMS_DIR,
+                                help='Directory used to store the model parameters.')
+common_args_parser.add_argument('--batch-size', '-b', type=int, default=DEFAULT_BATCH_SIZE,
+                                help='Maximum number of elements in a single batch.')
+common_args_parser.add_argument('--embedding-size', type=int, default=DEFAULT_EMBEDDING_SIZE,
+                                help='The size of the embedding layer.')
+common_args_parser.add_argument('--lstm-size', type=int, default=DEFAULT_LSTM_SIZE,
+                                help='The size of the lstm layers.')
+common_args_parser.add_argument('--window-size', type=int, default=DEFAULT_WINDOW_SIZE,
+                                help='The number of characters in a single instance of the data.')
+common_args_parser.add_argument('--sliding-step', type=int, default=DEFAULT_SLIDING_STEP,
+                                help='The number of characters to skip to generate between the start of two '
+                                     'consecutive windows.')
+
+train_parser = subparsers.add_parser('train', help='Train the model on a dataset.', parents=[common_args_parser])
+train_parser.add_argument('--train-data', '-t', type=Path, required=True, action='append',
+                          help='The file or directory containing the training data.')
+train_parser.add_argument('--val-data', '-v', type=Path, required=True, action='append',
+                          help='The file or directory containing the validation data.')
+train_parser.add_argument('--epochs', '-e', type=int, default=DEFAULT_TRAIN_STEPS,
+                          help='Maximum number of iterations before stopping the training process.')
+train_parser.add_argument('--dropout-rate', type=float, default=DEFAULT_DROPOUT_RATE,
+                          help='The rate of the dropout.')
+train_parser.add_argument('--monitor-metric', '-m', default=DEFAULT_MONITOR_METRIC,
+                          help='The metric to monitor to estimate the model performance when saving its weights and'
+                               ' for early stopping.')
+train_parser.add_argument('--early-stopping-epochs', '-s', type=int, default=DEFAULT_EARLY_STOPPING_STEPS,
+                          help='Number of training iterations to wait before stopping the training if there is no '
+                               'improvement.')
+train_parser.add_argument('--calculate-der', '-d', action='store_true',
+                          help='Calculate the Diacritization Error Rate on the validation dataset after each'
+                               ' iteration.')
+train_parser.add_argument('--calculate-wer', '-w', action='store_true',
+                          help='Calculate the Word Error Rate on the validation dataset after each iteration.')
+
+diacritization_parser = subparsers.add_parser('diacritization', help='Diacritize some text.',
+                                              parents=[common_args_parser])
+diacritization_parser.add_argument('--file', '-f', type=FileType('rt', encoding='UTF-8'), default=sys.stdin,
+                                   help='The path of the file containing undiacritized arabic text.')
+diacritization_parser.add_argument('--out-file', '-o', type=FileType('wt', encoding='UTF-8'), default=sys.stdout,
+                                   help='The path of the generated file containing the arabic text diacritized.')
+diacritization_parser.add_argument('--lines-at-once', '-l', type=int, default=DEFAULT_DIACRITIZATION_LINES_COUNT,
+                                   help='Number of lines to diacritize at once.')
+confusion_parser = subparsers.add_parser('confusion-matrix', help='Generate the confusion matrix from a predicted '
+                                                                  'diacritized text file and a ground-truth one.')
+confusion_parser.add_argument('predicted_file', help='The file generated by the diacritization model.',
+                              type=FileType('rt', encoding='UTF-8'))
+confusion_parser.add_argument('test_file',  help='The file having the ground-truth diacritics.',
+                              type=FileType('rt', encoding='UTF-8'))
+server_parser = subparsers.add_parser('server', help='Launch a diacritization web server.',
+                                      parents=[common_args_parser])
+
+
 if __name__ == '__main__':
-    main_parser = ArgumentParser(description='Command-line text diacritics restoration tool.')
-    subparsers = main_parser.add_subparsers(title='Commands', description='Available operations:',  dest='subcommand')
-
-    data_parser = subparsers.add_parser('download-dataset', help='Get and extract the data of training and testing.')
-    data_parser.add_argument('--data-dir', '-d', type=Path, default=DEFAULT_DATA_DIR,
-                             help='Directory used for downloading and extracting the dataset.')
-    data_parser.add_argument('--url', '-u', help='URL of the Tashkeela-processed dataset or any other dataset written'
-                                                 ' in the same format.',
-                             default='https://sourceforge.net/projects/tashkeela-processed/files/latest/download')
-
-    common_args_parser = ArgumentParser(add_help=False)
-    common_args_parser.add_argument('--params-dir', '-p', type=Path, default=DEFAULT_PARAMS_DIR,
-                                    help='Directory used to store the model parameters.')
-    common_args_parser.add_argument('--batch-size', '-b', type=int, default=DEFAULT_BATCH_SIZE,
-                                    help='Maximum number of elements in a single batch.')
-    common_args_parser.add_argument('--embedding-size', type=int, default=DEFAULT_EMBEDDING_SIZE,
-                                    help='The size of the embedding layer.')
-    common_args_parser.add_argument('--lstm-size', type=int, default=DEFAULT_LSTM_SIZE,
-                                    help='The size of the lstm layers.')
-    common_args_parser.add_argument('--window-size', type=int, default=DEFAULT_WINDOW_SIZE,
-                                    help='The number of characters in a single instance of the data.')
-    common_args_parser.add_argument('--sliding-step', type=int, default=DEFAULT_SLIDING_STEP,
-                                    help='The number of characters to skip to generate between the start of two '
-                                         'consecutive windows.')
-
-    train_parser = subparsers.add_parser('train', help='Train the model on a dataset.', parents=[common_args_parser])
-    train_parser.add_argument('--train-data', '-t', type=Path, required=True, action='append',
-                              help='The file or directory containing the training data.')
-    train_parser.add_argument('--val-data', '-v', type=Path, required=True, action='append',
-                              help='The file or directory containing the validation data.')
-    train_parser.add_argument('--epochs', '-e', type=int, default=DEFAULT_TRAIN_STEPS,
-                              help='Maximum number of iterations before stopping the training process.')
-    train_parser.add_argument('--dropout-rate', type=float, default=DEFAULT_DROPOUT_RATE,
-                              help='The rate of the dropout.')
-    train_parser.add_argument('--monitor-metric', '-m', default=DEFAULT_MONITOR_METRIC,
-                              help='The metric to monitor to estimate the model performance when saving its weights and'
-                                   ' for early stopping.')
-    train_parser.add_argument('--early-stopping-epochs', '-s', type=int, default=DEFAULT_EARLY_STOPPING_STEPS,
-                              help='Number of training iterations to wait before stopping the training if there is no '
-                                   'improvement.')
-    train_parser.add_argument('--calculate-der', '-d', action='store_true',
-                              help='Calculate the Diacritization Error Rate on the validation dataset after each'
-                                   ' iteration.')
-    train_parser.add_argument('--calculate-wer', '-w', action='store_true',
-                              help='Calculate the Word Error Rate on the validation dataset after each iteration.')
-
-    diacritization_parser = subparsers.add_parser('diacritization', help='Diacritize some text.',
-                                                  parents=[common_args_parser])
-    diacritization_parser.add_argument('--file', '-f', type=FileType('rt', encoding='UTF-8'), default=sys.stdin,
-                                       help='The path of the file containing undiacritized arabic text.')
-    diacritization_parser.add_argument('--out-file', '-o', type=FileType('wt', encoding='UTF-8'), default=sys.stdout,
-                                       help='The path of the generated file containing the arabic text diacritized.')
-    diacritization_parser.add_argument('--lines-at-once', '-l', type=int, default=DEFAULT_DIACRITIZATION_LINES_COUNT,
-                                       help='Number of lines to diacritize at once.')
-    confusion_parser = subparsers.add_parser('confusion-matrix', help='Generate the confusion matrix from a predicted '
-                                                                      'diacritized text file and a ground-truth one.')
-    confusion_parser.add_argument('predicted_file', help='The file generated by the diacritization model.',
-                                  type=FileType('rt', encoding='UTF-8'))
-    confusion_parser.add_argument('test_file',  help='The file having the ground-truth diacritics.',
-                                  type=FileType('rt', encoding='UTF-8'))
-
     args = main_parser.parse_args()
     if args.subcommand == 'download-dataset':
         data_dir = args.data_dir.expanduser()
@@ -124,7 +184,6 @@ if __name__ == '__main__':
         from tensorflow.keras.losses import SparseCategoricalCrossentropy, BinaryCrossentropy
         from tensorflow.keras.callbacks import (ModelCheckpoint, TerminateOnNaN, LambdaCallback, EarlyStopping,
                                                 TensorBoard)
-        from multilevel_diacritizer.model import MultiLevelDiacritizer
 
         model, model_path = get_loaded_model(args)
 
@@ -180,8 +239,6 @@ if __name__ == '__main__':
                   )
         logger.info('Training finished.')
     elif args.subcommand == 'diacritization':
-        from multilevel_diacritizer.model import MultiLevelDiacritizer
-
         args.dropout_rate = 0
         args.calculate_der = False
         args.calculate_wer = False
@@ -194,41 +251,22 @@ if __name__ == '__main__':
                     text += line
                 yield text
 
-        def get_sentences(text):
-            fragments = list(filter(None, SENTENCE_TOKENIZATION_REGEXP.split(text)))
-            u_sentences = []
-            for s in fragments:
-                if s.strip(SENTENCE_SEPARATORS+'\n') != '':
-                    u_sentences.append(s)
-                else:
-                    u_sentences[-1] = u_sentences[-1] + s
-            return u_sentences
-
-        def insert_d_words(u_sentence, d_words):
-            start_index = 0
-            d_sentence = u_sentence
-            for d_word in d_words:
-                d_word = d_word.numpy().decode('UTF-8')
-                u_word = DIACRITICS_PATTERN.sub('', d_word)
-                d_sentence = d_sentence[:start_index] + d_sentence[start_index:].replace(u_word, d_word, 1)
-                start_index = d_sentence.find(d_word, start_index) + len(d_word)
-            return d_sentence
-
         logger.info('Diacritizing...')
         for text in read_lines_at_once(args.file, args.lines_at_once):
-            text = DIACRITICS_PATTERN.sub('', text)
-            u_sentences = get_sentences(text)
-            d_sentence_words = model.diacritize_words(u_sentences, args.window_size, args.sliding_step)
-            d_sentences = list(map(insert_d_words, u_sentences, d_sentence_words))
-            start_index = 0
-            for d_sentence, u_sentence in zip(d_sentences, u_sentences):
-                text = text[:start_index] + text[start_index:].replace(u_sentence, d_sentence, 1)
-                start_index += len(d_sentence)
+            text = diacritize_text(model, args, text)
             print(text, end='', file=args.out_file)
         args.out_file.close()
         logger.info('Done')
     elif args.subcommand == 'confusion-matrix':
         from multilevel_diacritizer.confusion_matrix import generate_confusion_matrix
         generate_confusion_matrix(args.predicted_file, args.test_file)
+    elif args.subcommand == 'server':
+        import os
+        import sys
+        logger.info('Running the diacritization server...')
+        os.environ['FLASK_APP'] = f'{__file__}:create_server_app({sys.argv[2:]})'
+        os.environ['FLASK_ENV'] = 'development'  # TODO: Remove the debugging lines.
+        os.environ['FLASK_DEBUG'] = '1'
+        os.system('flask run')
     else:
         main_parser.print_help()

@@ -211,8 +211,8 @@ class MultiLevelDiacritizer(Model):
     def diacritize_words(self, sentences, window_size, sliding_step):
         dataset = tf.data.Dataset.from_tensor_slices(sentences).map(self.clean_and_encode_sentence)
         dataset = dataset.concatenate(tf.data.Dataset.from_tensor_slices((
-            tf.zeros((1, sliding_step), tf.int32),
-            tuple(tf.zeros((1, sliding_step), tf.int32) for _ in range(4))
+            tf.zeros((1, window_size), tf.int32),
+            tuple(tf.zeros((1, window_size), tf.int32) for _ in range(4))
         )))
         dataset = self.make_window_dataset(dataset, window_size, sliding_step)
         dataset = dataset.map(lambda x, y: x)
