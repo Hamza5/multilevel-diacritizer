@@ -265,11 +265,9 @@ if __name__ == '__main__':
         import os
         import sys
         logger.info('Running the diacritization server...')
-        try:
-            import gunicorn
-            del gunicorn
-            os.system(f'gunicorn "{__file__}:create_server_app({sys.argv[2:]})"')
-        except (ImportError, ModuleNotFoundError):
+        if os.name != 'nt':
+            os.system(f'gunicorn "multilevel_diacritizer.multi_level_diacritizer:create_server_app({sys.argv[2:]})"')
+        else:
             os.environ['FLASK_APP'] = f'{__file__}:create_server_app({sys.argv[2:]})'
             os.environ['FLASK_ENV'] = 'development'
             os.environ['FLASK_DEBUG'] = '1'
