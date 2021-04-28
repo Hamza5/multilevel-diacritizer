@@ -85,21 +85,21 @@ def diacritize_text(model, args, text):
     return text
 
 
-def create_server_app(args):
+def create_server_app(argv=[]):
     from flask import Flask, request, make_response
 
-    args = server_parser.parse_args(args)
-    args.dropout_rate = 0
-    args.calculate_der = False
-    args.calculate_wer = False
-    model, model_path = get_loaded_model(args)
+    argv = server_parser.parse_args(argv)
+    argv.dropout_rate = 0
+    argv.calculate_der = False
+    argv.calculate_wer = False
+    model, model_path = get_loaded_model(argv)
 
     app = Flask(__name__)
 
     @app.route('/', methods=['POST'])
     def home():
         text = request.get_data(as_text=True)
-        response = make_response(diacritize_text(model, args, text))
+        response = make_response(diacritize_text(model, argv, text))
         response.headers['Content-Type'] = 'text/plain; charset=UTF-8'
         return response
 
@@ -265,9 +265,14 @@ if __name__ == '__main__':
         import os
         import sys
         logger.info('Running the diacritization server...')
-        os.environ['FLASK_APP'] = f'{__file__}:create_server_app({sys.argv[2:]})'
-        # os.environ['FLASK_ENV'] = 'development'
-        # os.environ['FLASK_DEBUG'] = '1'
-        os.system('flask run -h 0.0.0.0 -p 80')
+        try:
+            import gunicorn
+            del gunicorn
+            os.system(f'gunicorn {__file__}:create_server_app()')
+        except (ImportError, ModuleNotFoundError):
+            os.environ['FLASK_APP'] = f'{__file__}:create_server_app({sys.argv[2:]})'
+            os.environ['FLASK_ENV'] = 'development'
+            os.environ['FLASK_DEBUG'] = '1'
+            os.system('flask run -h 0.0.0.0 -p 80')
     else:
         main_parser.print_help()
