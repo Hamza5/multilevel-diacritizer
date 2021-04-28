@@ -8,7 +8,8 @@ import tensorflow as tf
 
 # The next two lines are added to avoid the crash of Tensorflow when calling a model on a GPU.
 physical_devices = tf.config.list_physical_devices('GPU')
-tf.config.experimental.set_memory_growth(physical_devices[0], enable=True)
+if physical_devices:
+    tf.config.experimental.set_memory_growth(physical_devices[0], enable=True)
 from multilevel_diacritizer.constants import (
     DATASET_FILE_NAME, DEFAULT_DATA_DIR, DEFAULT_PARAMS_DIR, DEFAULT_TRAIN_STEPS, DEFAULT_BATCH_SIZE,
     DEFAULT_EARLY_STOPPING_STEPS, DEFAULT_WINDOW_SIZE, DEFAULT_SLIDING_STEP, DEFAULT_MONITOR_METRIC,
