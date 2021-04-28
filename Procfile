@@ -1,0 +1,1 @@
+web: python multilevel_diacritizer/multi_level_diacritizer.py server
