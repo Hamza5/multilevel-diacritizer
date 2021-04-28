@@ -261,20 +261,6 @@ six = ">=1.5.2"
 protobuf = ["grpcio-tools (>=1.37.0)"]
 
 [[package]]
-name = "gunicorn"
-version = "20.1.0"
-description = "WSGI HTTP Server for UNIX"
-category = "main"
-optional = false
-python-versions = ">=3.5"
-
-[package.extras]
-eventlet = ["eventlet (>=0.24.1)"]
-gevent = ["gevent (>=1.4.0)"]
-setproctitle = ["setproctitle"]
-tornado = ["tornado (>=0.2)"]
-
-[[package]]
 name = "h5py"
 version = "2.10.0"
 description = "Read and write HDF5 files from Python"
@@ -1237,7 +1223,7 @@ testing = ["pytest (>=4.6)", "pytest-checkdocs (>=1.2.3)", "pytest-flake8", "pyt
 [metadata]
 lock-version = "1.1"
 python-versions = ">=3.6,<3.8"
-content-hash = "f8d8065bc1774bb0eb64b84a57eab8c38bc46c5341868978784ba3bca7692eae"
+content-hash = "ab0d1ff01bab1ce110a916e125a91fa7bc971469bda7d61be870ba80a331a415"
 
 [metadata.files]
 absl-py = [
@@ -1435,10 +1421,6 @@ grpcio = [
     {file = "grpcio-1.37.0-cp39-cp39-win32.whl", hash = "sha256:adfef1a3994220bd39e5e2dd57714ca94c4c38c9015f2812a0b09b39f86ddbe0"},
     {file = "grpcio-1.37.0-cp39-cp39-win_amd64.whl", hash = "sha256:df142d51d7de3f8d13aaa78f7ddc7d74088226f92ec5aae8d98d8ae5d328f74b"},
     {file = "grpcio-1.37.0.tar.gz", hash = "sha256:b3ce16aa91569760fdabd77ca901b2288152eb16941d28edd9a3a75a0c4a8a85"},
-]
-gunicorn = [
-    {file = "gunicorn-20.1.0-py3-none-any.whl", hash = "sha256:9dcc4547dbb1cb284accfb15ab5667a0e5d1881cc443e0677b4882a4067a807e"},
-    {file = "gunicorn-20.1.0.tar.gz", hash = "sha256:e0a968b5ba15f8a328fdfd7ab1fcb5af4470c28aaf7e55df02a99bc13138e6e8"},
 ]
 h5py = [
     {file = "h5py-2.10.0-cp27-cp27m-macosx_10_6_intel.whl", hash = "sha256:ecf4d0b56ee394a0984de15bceeb97cbe1fe485f1ac205121293fc44dcf3f31f"},
