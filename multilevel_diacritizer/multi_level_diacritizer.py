@@ -264,9 +264,15 @@ if __name__ == '__main__':
         import os
         import sys
         logger.info('Running the diacritization server...')
-        os.environ['FLASK_APP'] = f'{__file__}:create_server_app({sys.argv[2:]})'
-        os.environ['FLASK_ENV'] = 'development'  # TODO: Remove the debugging lines.
-        os.environ['FLASK_DEBUG'] = '1'
-        os.system('flask run')
+        try:
+            import gunicorn
+            del gunicorn
+            os.system(f'gunicorn {__file__}:create_server_app({sys.argv[2:]})')
+        except (ImportError, ModuleNotFoundError):
+            os.environ['FLASK_APP'] = f'{__file__}:create_server_app({sys.argv[2:]})'
+            os.environ['FLASK_ENV'] = 'development'
+            os.environ['FLASK_DEBUG'] = '1'
+            os.system('flask run')
+
     else:
         main_parser.print_help()
