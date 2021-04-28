@@ -268,7 +268,7 @@ if __name__ == '__main__':
         try:
             import gunicorn
             del gunicorn
-            os.system(f'gunicorn {__file__}:create_server_app()')
+            os.system(f'gunicorn "{__file__}:create_server_app({sys.argv[2:]})"')
         except (ImportError, ModuleNotFoundError):
             os.environ['FLASK_APP'] = f'{__file__}:create_server_app({sys.argv[2:]})'
             os.environ['FLASK_ENV'] = 'development'
