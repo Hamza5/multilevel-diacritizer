@@ -268,6 +268,6 @@ if __name__ == '__main__':
         os.environ['FLASK_APP'] = f'{__file__}:create_server_app({sys.argv[2:]})'
         # os.environ['FLASK_ENV'] = 'development'
         # os.environ['FLASK_DEBUG'] = '1'
-        os.system('flask run')
+        os.system('flask run -h 0.0.0.0 -p 80')
     else:
         main_parser.print_help()
