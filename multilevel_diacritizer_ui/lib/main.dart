@@ -1,8 +1,13 @@
 import 'dart:convert';
+import 'dart:ui';
 
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:clipboard/clipboard.dart';
+
+import 'dart:html' as html;
+
+final Uri _submitURL = Uri.parse(html.window.location.href);
 
 void main() {
   runApp(MyApp());
@@ -43,8 +48,6 @@ class DiacritizationForm extends StatefulWidget {
 class _DiacritizationFormState extends State<DiacritizationForm> {
   final GlobalKey<FormState> _formKey = GlobalKey<FormState>();
   final TextEditingController _textEditingController = TextEditingController();
-  final Uri _submitURL =
-      Uri.parse('https://multilevel-diacritizer.herokuapp.com/');
   bool _enableSubmit = true;
 
   Future<void> submit() async {
