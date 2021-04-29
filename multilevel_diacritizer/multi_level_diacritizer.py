@@ -88,7 +88,7 @@ def diacritize_text(model, args, text):
 def create_server_app(argv=None):
     if not argv:
         argv = []
-    from flask import Flask, request, make_response
+    from flask import Flask, request, make_response, send_from_directory
     from flask_cors import CORS
 
     argv = server_parser.parse_args(argv)
@@ -100,12 +100,16 @@ def create_server_app(argv=None):
     app = Flask(__name__)
     CORS(app)
 
-    @app.route('/', methods=['POST'])
-    def home():
-        text = request.get_data(as_text=True)
-        response = make_response(diacritize_text(model, argv, text))
-        response.headers['Content-Type'] = 'text/plain; charset=UTF-8'
-        return response
+    @app.route('/', methods=['GET', 'POST'])
+    @app.route('/<path:filename>', methods=['GET'])
+    def home(filename='index.html'):
+        if request.method == 'GET':
+            return send_from_directory('../multilevel_diacritizer_ui/build/web/', filename)
+        else:
+            text = request.get_data(as_text=True)
+            response = make_response(diacritize_text(model, argv, text))
+            response.headers['Content-Type'] = 'text/plain; charset=UTF-8'
+            return response
 
     return app
 
