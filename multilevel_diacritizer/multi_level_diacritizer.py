@@ -85,8 +85,11 @@ def diacritize_text(model, args, text):
     return text
 
 
-def create_server_app(argv=[]):
+def create_server_app(argv=None):
+    if not argv:
+        argv = []
     from flask import Flask, request, make_response
+    from flask_cors import CORS
 
     argv = server_parser.parse_args(argv)
     argv.dropout_rate = 0
@@ -95,6 +98,7 @@ def create_server_app(argv=[]):
     model, model_path = get_loaded_model(argv)
 
     app = Flask(__name__)
+    CORS(app)
 
     @app.route('/', methods=['POST'])
     def home():
