@@ -1,6 +1,5 @@
 import 'dart:convert';
-import 'dart:ui';
-
+import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:clipboard/clipboard.dart';
@@ -49,10 +48,12 @@ class _DiacritizationFormState extends State<DiacritizationForm> {
   final GlobalKey<FormState> _formKey = GlobalKey<FormState>();
   final TextEditingController _textEditingController = TextEditingController();
   bool _enableSubmit = true;
+  double _angle = 0;
 
   Future<void> submit() async {
     setState(() {
       _enableSubmit = false;
+      _angle -= pi;
     });
     _showSnackBar(
         'Diacritizing the text...', Icons.text_fields, Colors.blueAccent,
@@ -176,9 +177,22 @@ class _DiacritizationFormState extends State<DiacritizationForm> {
                 'Restore diacritics',
                 textScaleFactor: 1.5,
               ),
-              icon: Icon(
-                Icons.settings_backup_restore,
-                color: Theme.of(context).scaffoldBackgroundColor,
+              icon: TweenAnimationBuilder(
+                child: Icon(
+                  Icons.settings_backup_restore,
+                  color: Theme.of(context).scaffoldBackgroundColor,
+                ),
+                duration: Duration(milliseconds: 500),
+                tween: Tween<double>(begin: 0, end: _angle),
+                builder: (BuildContext context, double angle, Widget? child){
+                  return Transform.rotate(
+                    angle: angle,
+                    child: child,
+                  );
+                },
+                onEnd: () => setState(() {
+                  if (!_enableSubmit) _angle -= pi;
+                }),
               ),
             ),
           ],
