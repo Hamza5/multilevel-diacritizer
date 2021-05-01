@@ -19,7 +19,7 @@ class MyApp extends StatelessWidget {
     return MaterialApp(
       title: 'Multilevel diacritizer',
       builder: (BuildContext context, Widget? child) => FocusScope(
-        child: GestureDetector(
+        child: GestureDetector( // Useful to hide the keyboard in the mobile app
           onTap: () => Focus.of(context).unfocus(),
           child: child,
         ),
@@ -107,7 +107,7 @@ class _DiacritizationFormState extends State<DiacritizationForm> {
       key: _formKey,
       child: Container(
         padding: EdgeInsets.all(15),
-        child: Column(
+        child: ListView(
           children: [
             Row(
               children: <Widget>[
@@ -136,12 +136,12 @@ class _DiacritizationFormState extends State<DiacritizationForm> {
                   children: <Widget>[
                     IconButton(
                       icon: Icon(Icons.copy),
-                      onPressed: () =>
+                      onPressed: _enableSubmit ? () =>
                           FlutterClipboard.copy(_textEditingController.text)
                               .then((value) => _showSnackBar(
                                   'Text copied to clipboard!',
                                   Icons.info,
-                                  Colors.blueAccent)),
+                                  Colors.blueAccent)): null,
                       tooltip: 'Copy the text to the clipboard',
                     ),
                     SizedBox(
@@ -149,9 +149,9 @@ class _DiacritizationFormState extends State<DiacritizationForm> {
                     ),
                     IconButton(
                       icon: Icon(Icons.paste),
-                      onPressed: () => FlutterClipboard.paste().then((value) {
+                      onPressed: _enableSubmit ? () => FlutterClipboard.paste().then((value) {
                         setState(() => _textEditingController.text = value);
-                      }),
+                      }) : null,
                       tooltip: 'Paste the text from the clipboard',
                     ),
                     SizedBox(
@@ -159,9 +159,9 @@ class _DiacritizationFormState extends State<DiacritizationForm> {
                     ),
                     IconButton(
                         icon: Icon(Icons.clear),
-                        onPressed: () {
+                        onPressed: _enableSubmit ? () {
                           setState(() => _textEditingController.clear());
-                        },
+                        } : null,
                       tooltip: 'Clear the text',
                     )
                   ],
@@ -171,28 +171,31 @@ class _DiacritizationFormState extends State<DiacritizationForm> {
             SizedBox(
               height: 5,
             ),
-            ElevatedButton.icon(
-              onPressed: _enableSubmit ? submit : null,
-              label: Text(
-                'Restore diacritics',
-                textScaleFactor: 1.5,
-              ),
-              icon: TweenAnimationBuilder(
-                child: Icon(
-                  Icons.settings_backup_restore,
-                  color: Theme.of(context).scaffoldBackgroundColor,
+            FittedBox(
+              fit: BoxFit.scaleDown,
+              child: ElevatedButton.icon(
+                onPressed: _enableSubmit ? submit : null,
+                label: Text(
+                  'Restore diacritics',
+                  textScaleFactor: 1.5,
                 ),
-                duration: Duration(milliseconds: 500),
-                tween: Tween<double>(begin: 0, end: _angle),
-                builder: (BuildContext context, double angle, Widget? child){
-                  return Transform.rotate(
-                    angle: angle,
-                    child: child,
-                  );
-                },
-                onEnd: () => setState(() {
-                  if (!_enableSubmit) _angle -= pi;
-                }),
+                icon: TweenAnimationBuilder(
+                  child: Icon(
+                    Icons.settings_backup_restore,
+                    color: Theme.of(context).scaffoldBackgroundColor,
+                  ),
+                  duration: Duration(milliseconds: 500),
+                  tween: Tween<double>(begin: 0, end: _angle),
+                  builder: (BuildContext context, double angle, Widget? child){
+                    return Transform.rotate(
+                      angle: angle,
+                      child: child,
+                    );
+                  },
+                  onEnd: () => setState(() {
+                    if (!_enableSubmit) _angle -= pi;
+                  }),
+                ),
               ),
             ),
           ],
