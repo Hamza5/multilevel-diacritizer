@@ -89,7 +89,6 @@ def create_server_app(argv=None):
     if not argv:
         argv = []
     from flask import Flask, request, make_response, send_from_directory
-    from flask_cors import CORS
 
     argv = server_parser.parse_args(argv)
     argv.dropout_rate = 0
@@ -98,7 +97,6 @@ def create_server_app(argv=None):
     model, model_path = get_loaded_model(argv)
 
     app = Flask(__name__)
-    CORS(app)
 
     @app.route('/', methods=['GET', 'POST'])
     @app.route('/<path:filename>', methods=['GET'])
