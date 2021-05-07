@@ -157,6 +157,10 @@ train_parser.add_argument('--calculate-der', '-d', action='store_true',
                                ' iteration.')
 train_parser.add_argument('--calculate-wer', '-w', action='store_true',
                           help='Calculate the Word Error Rate on the validation dataset after each iteration.')
+train_parser.add_argument('--preview', action='store_true',
+                          help='Show a diacritization preview on the validation set with current model performance.')
+train_parser.add_argument('--tensorboard', action='store_true',
+                          help='Record Tensorboard data to the log directory.')
 
 diacritization_parser = subparsers.add_parser('diacritization', help='Diacritize some text.',
                                               parents=[common_args_parser])
@@ -230,19 +234,26 @@ if __name__ == '__main__':
                        SparseCategoricalCrossentropy(from_logits=True, name='secondary_loss'),
                        BinaryCrossentropy(from_logits=True, name='shadda_loss'),
                        BinaryCrossentropy(from_logits=True, name='sukoon_loss')])
-        model.fit(train_set['dataset'].repeat(), steps_per_epoch=train_set['size'], epochs=args.epochs,
-                  initial_epoch=get_initial_epoch(),
-                  validation_data=val_set['dataset'].repeat(), validation_steps=val_set['size'],
-                  callbacks=[ModelCheckpoint(str(model_path), save_best_only=True, save_weights_only=True,
-                                             monitor=args.monitor_metric), TerminateOnNaN(),
-                             EarlyStopping(monitor=args.monitor_metric, patience=args.early_stopping_epochs, verbose=1),
-                             LambdaCallback(
+        callbacks = [
+            ModelCheckpoint(str(model_path), save_best_only=True, save_weights_only=True,
+                            monitor=args.monitor_metric),
+            TerminateOnNaN(),
+            EarlyStopping(monitor=args.monitor_metric, patience=args.early_stopping_epochs, verbose=1),
+            LambdaCallback(on_epoch_end=write_epoch),
+        ]
+        if args.preview:
+            callbacks.append(LambdaCallback(
                                  on_epoch_end=lambda epoch, logs: logger.info(
                                      '\nPred: %s\nReal: %s',
                                      *get_diacritization_preview(val_set, args.sliding_step, model, 100)
                                  )
-                             ), LambdaCallback(on_epoch_end=write_epoch), TensorBoard()
-                             ]
+                             ))
+        if args.tensorboard:
+            callbacks.append(TensorBoard())
+        model.fit(train_set['dataset'].repeat(), steps_per_epoch=train_set['size'], epochs=args.epochs,
+                  initial_epoch=get_initial_epoch(),
+                  validation_data=val_set['dataset'].repeat(), validation_steps=val_set['size'],
+                  callbacks=callbacks
                   )
         logger.info('Training finished.')
     elif args.subcommand == 'diacritization':
