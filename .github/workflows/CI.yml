@@ -25,7 +25,8 @@ jobs:
     - name: Install dependencies
       run: poetry install --no-interaction --no-root
 
+    - name: Select environment
+      run: poetry env info
+
     - name: Run tests
-      run: |
-          poetry env info
-          python -m unittest tests/
+      run: python -m unittest discover tests/
