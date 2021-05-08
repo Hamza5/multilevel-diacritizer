@@ -1,5 +1,8 @@
 import unittest
 import subprocess
+from pathlib import Path
+print(Path.cwd())
+print(list(Path.cwd().glob('*')))
 
 PYTHON = 'python'
 SCRIPT = 'multilevel_diacritizer/multi_level_diacritizer.py'
