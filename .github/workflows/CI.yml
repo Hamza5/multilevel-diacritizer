@@ -27,5 +27,5 @@ jobs:
 
     - name: Run tests
       run: |
-          poetry shell
+          poetry env info
           python -m unittest tests/
