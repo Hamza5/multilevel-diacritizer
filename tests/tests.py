@@ -1,28 +1,29 @@
 import unittest
 import subprocess
 from pathlib import Path
-print(Path.cwd())
-print(list(Path.cwd().glob('*')))
 
 PYTHON = 'python'
-SCRIPT = 'multilevel_diacritizer/multi_level_diacritizer.py'
+SCRIPT = str(Path(__file__).parent.parent / 'multilevel_diacritizer/multi_level_diacritizer.py')
 DATA_FILENAME = 'tests/train_mini.txt'
 
 
 class CommandLineTestCase(unittest.TestCase):
 
     def test_help(self):
-        p = subprocess.run([PYTHON, SCRIPT], capture_output=True, check=True, text=True)
-        self.assertEqual(p.returncode, 0)
-        self.assertIn('usage:', p.stdout)
-        self.assertIn('--help', p.stdout)
-        p = subprocess.run([PYTHON, SCRIPT, '-h'], capture_output=True, check=True, text=True)
-        self.assertEqual(p.returncode, 0)
-        self.assertIn('usage:', p.stdout)
-        self.assertIn('--help', p.stdout)
+        try:
+            p = subprocess.run([PYTHON, SCRIPT], capture_output=True, check=True, text=True)
+            self.assertEqual(p.returncode, 0)
+            self.assertIn('usage:', p.stdout)
+            self.assertIn('--help', p.stdout)
+            p = subprocess.run([PYTHON, SCRIPT, '-h'], capture_output=True, check=True, text=True)
+            self.assertEqual(p.returncode, 0)
+            self.assertIn('usage:', p.stdout)
+            self.assertIn('--help', p.stdout)
+        except subprocess.CalledProcessError as e:
+            print(e)
+            print(e.stderr)
 
     def test_train(self):
-        from pathlib import Path
         last_epoch_file = Path('params/last_epoch.txt')
         for file in Path('params/').glob('*'):
             file.rename(f'{file}~')
@@ -32,6 +33,9 @@ class CommandLineTestCase(unittest.TestCase):
             self.assertTrue(last_epoch_file.exists())
             self.assertIn('Training finished', p.stderr)
             self.assertIn('val_loss', p.stdout)
+        except subprocess.CalledProcessError as e:
+            print(e)
+            print(e.stderr)
         finally:
             for backup_file in Path('params/').glob('*~'):
                 destination_file = Path(str(backup_file).rstrip('~'))
@@ -42,7 +46,6 @@ class CommandLineTestCase(unittest.TestCase):
                 last_epoch_file.unlink()
 
     def test_diacritization(self):
-        from pathlib import Path
         original_file = Path(DATA_FILENAME)
         tiny_file = original_file.with_name('_tiny.'.join(original_file.name.split('.')))
         predicted_file = tiny_file.with_name('-pred.'.join(original_file.name.split('.')))
@@ -58,6 +61,9 @@ class CommandLineTestCase(unittest.TestCase):
             self.assertEqual(len(predicted_lines), len(tiny_lines))
             # The model should diacritize one sentence at least perfectly.
             self.assertGreater(len(set(predicted_lines).intersection(set(tiny_lines))), 0)
+        except subprocess.CalledProcessError as e:
+            print(e)
+            print(e.stderr)
         finally:
             if tiny_file.exists():
                 tiny_file.unlink()
