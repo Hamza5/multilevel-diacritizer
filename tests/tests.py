@@ -29,8 +29,6 @@ class CommandLineTestCase(unittest.TestCase):
             self.assertTrue(last_epoch_file.exists())
             self.assertIn('Training finished', p.stderr)
             self.assertIn('val_loss', p.stdout)
-        except subprocess.CalledProcessError as e:
-            raise e
         finally:
             for backup_file in Path('params/').glob('*~'):
                 destination_file = Path(str(backup_file).rstrip('~'))
@@ -43,16 +41,25 @@ class CommandLineTestCase(unittest.TestCase):
     def test_diacritization(self):
         from pathlib import Path
         original_file = Path(DATA_FILENAME)
-        original_text = '\n'.join(original_file.read_text(encoding='UTF-8').splitlines()[:100])
-        p = subprocess.run([PYTHON, SCRIPT, 'diacritization'], input=original_text,
-                           capture_output=True, check=True, text=True, encoding='UTF-8')
-        self.assertIn('Model weights loaded', p.stderr)
-        self.assertIn('Done', p.stderr)
-        predicted_lines = p.stdout.splitlines()
-        original_lines = original_text.splitlines()
-        self.assertEqual(len(predicted_lines), len(original_lines))
-        # The model should diacritize one sentence at least perfectly.
-        self.assertGreater(len(set(predicted_lines).intersection(set(original_lines))), 0)
+        tiny_file = original_file.with_name('_tiny.'.join(original_file.name.split('.')))
+        predicted_file = tiny_file.with_name('-pred.'.join(original_file.name.split('.')))
+        try:
+            tiny_text = '\n'.join(original_file.read_text(encoding='UTF-8').splitlines()[:100])
+            tiny_file.write_text(tiny_text, encoding='UTF-8')
+            p = subprocess.run([PYTHON, SCRIPT, 'diacritization', '-f', str(tiny_file), '-o', str(predicted_file)],
+                               capture_output=True, check=True, text=True, encoding='UTF-8')
+            self.assertIn('Model weights loaded', p.stderr)
+            self.assertIn('Done', p.stderr)
+            predicted_lines = predicted_file.read_text(encoding='UTF-8').splitlines()
+            tiny_lines = tiny_text.splitlines()
+            self.assertEqual(len(predicted_lines), len(tiny_lines))
+            # The model should diacritize one sentence at least perfectly.
+            self.assertGreater(len(set(predicted_lines).intersection(set(tiny_lines))), 0)
+        finally:
+            if tiny_file.exists():
+                tiny_file.unlink()
+            if predicted_file.exists():
+                predicted_file.unlink()
 
 
 if __name__ == '__main__':
