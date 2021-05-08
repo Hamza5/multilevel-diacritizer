@@ -20,8 +20,8 @@ class CommandLineTestCase(unittest.TestCase):
             self.assertIn('usage:', p.stdout)
             self.assertIn('--help', p.stdout)
         except subprocess.CalledProcessError as e:
-            print(e)
             print(e.stderr)
+            raise e
 
     def test_train(self):
         last_epoch_file = Path('params/last_epoch.txt')
@@ -34,8 +34,8 @@ class CommandLineTestCase(unittest.TestCase):
             self.assertIn('Training finished', p.stderr)
             self.assertIn('val_loss', p.stdout)
         except subprocess.CalledProcessError as e:
-            print(e)
             print(e.stderr)
+            raise e
         finally:
             for backup_file in Path('params/').glob('*~'):
                 destination_file = Path(str(backup_file).rstrip('~'))
@@ -62,8 +62,8 @@ class CommandLineTestCase(unittest.TestCase):
             # The model should diacritize one sentence at least perfectly.
             self.assertGreater(len(set(predicted_lines).intersection(set(tiny_lines))), 0)
         except subprocess.CalledProcessError as e:
-            print(e)
             print(e.stderr)
+            raise e
         finally:
             if tiny_file.exists():
                 tiny_file.unlink()
