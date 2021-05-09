@@ -20,7 +20,7 @@ def diacritics_names(diacritics):
     return '+'.join(DIACRITICS_NAMES[d] for d in diacritics) or 'None'
 
 
-def generate_confusion_matrix(pred_file, test_file):
+def generate_confusion_matrix(pred_file, test_file, out_picture_path):
     confusion_dict = {}
     for test_line, pred_line in zip(test_file, pred_file):
         test_diacritics, pred_diacritics = extract_diacritics(test_line), extract_diacritics(pred_line)
@@ -59,4 +59,7 @@ def generate_confusion_matrix(pred_file, test_file):
             ax.text(j, i, '{:.1%}'.format(confusion_matrix[i, j]), ha="center", va="center", color="slategrey", fontsize=5)
 
     plt.tight_layout()
-    plt.show()
+    if out_picture_path:
+        plt.savefig(str(out_picture_path))
+    else:
+        plt.show()
