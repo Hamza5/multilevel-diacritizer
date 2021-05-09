@@ -1,9 +1,11 @@
 import unittest
 import subprocess
 from pathlib import Path
+import sys
+print(sys.path)
 
 PYTHON = 'python'
-SCRIPT = str(Path(__file__).parent.parent / 'multilevel_diacritizer/multi_level_diacritizer.py')
+SCRIPT = 'multilevel_diacritizer/multi_level_diacritizer.py'
 DATA_FILENAME = 'tests/train_mini.txt'
 
 
