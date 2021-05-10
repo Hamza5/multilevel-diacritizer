@@ -5,7 +5,9 @@ from argparse import Namespace
 import tensorflow as tf
 import numpy as np
 
-from multilevel_diacritizer.multi_level_diacritizer import get_loaded_model, get_dataset_from
+from multilevel_diacritizer.multi_level_diacritizer import (
+    get_loaded_model, get_dataset_from, diacritize_text, get_sentences
+)
 from multilevel_diacritizer.model import MultiLevelDiacritizer
 from multilevel_diacritizer.constants import (
     DEFAULT_WINDOW_SIZE, DEFAULT_LSTM_SIZE, DEFAULT_DROPOUT_RATE, DEFAULT_EMBEDDING_SIZE, DEFAULT_PARAMS_DIR,
@@ -14,6 +16,17 @@ from multilevel_diacritizer.constants import (
 
 
 class ModelTestCase(unittest.TestCase):
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.u_text = ''''
+        رواق - المنصة العربية للتعليم المفتوح
+        مواد أكاديمية مجانية باللغة العربية في شتى المجالات والتخصصات
+        المحاضرين الجامعيين، الأكاديميين، الخبراء المهنيين
+        إذا كنت تقوم بتدريس أو تدريب طلاب في معهد، كلية، جامعة، منظمة،
+        في تخصص معين ولديك الرغبة في نقل المحتوى التعليمي إلى جمهور أوسع، فنحن في رواق نوفر لك هذه الميزة.
+        '''
+        cls.data_file_path = Path('tests/train_mini.txt')
 
     def test_loading_model(self):
         model, model_path = get_loaded_model(
@@ -26,13 +39,19 @@ class ModelTestCase(unittest.TestCase):
 
     def test_train_dataset(self):
         data = get_dataset_from(
-            [Path('tests/train_mini.txt')],
+            [self.data_file_path],
             Namespace(batch_size=DEFAULT_BATCH_SIZE, window_size=DEFAULT_WINDOW_SIZE, sliding_step=DEFAULT_SLIDING_STEP)
         )
         self.assertIn('dataset', data.keys())
         self.assertIn('size', data.keys())
         self.assertIsInstance(data['dataset'], tf.data.Dataset)
         self.assertEqual(np.ndim(data['size']), 0)
+
+    def test_sentences(self):
+        sentences = get_sentences(self.u_text)
+        self.assertIsInstance(sentences, list)
+        for s in sentences:
+            self.assertIsInstance(s, str)
 
 
 if __name__ == '__main__':
