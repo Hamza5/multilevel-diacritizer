@@ -1,4 +1,4 @@
-name: Continious Integration for Multilevel Diacritizer
+name: Continious Integration
 
 on:
   push:
