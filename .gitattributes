@@ -1,2 +1,3 @@
 # Exclude the Flutter generated web app.
-build/ linguist-generated
+*.js linguist-generated
+*.html linguist-generated
