@@ -1,1 +1,2 @@
-multilevel_diacritizer_ui/build/* linguist-vendored
+# Exclude the Flutter generated web app.
+multilevel_diacritizer_ui/build/* linguist-generated
