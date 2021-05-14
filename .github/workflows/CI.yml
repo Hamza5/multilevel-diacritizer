@@ -12,8 +12,12 @@ jobs:
 
     runs-on: ubuntu-latest
 
+    outputs:
+      backend: ${{ steps.filter.outputs.backend }}
+    #      frontend: ${{ steps.filter.outputs.frontend }}
+
     steps:
-      - uses: dorny/paths-filter@v2
+      - uses: dorny/paths-filter@v2.10.1
         id: filter
         with:
           filters: |
@@ -21,10 +25,6 @@ jobs:
               - 'multilevel_diacritizer/**'
 #            frontend:
 #              - 'multilevel_diacritizer_ui/**'
-
-    outputs:
-      backend: ${{ steps.filter.outputs.backend }}
-#      frontend: ${{ steps.filter.outputs.frontend }}
 
 
   backend:
