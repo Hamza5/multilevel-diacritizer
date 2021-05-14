@@ -7,11 +7,34 @@ on:
     branches: [ master ]
 
 jobs:
-  test:
+
+  changes:
 
     runs-on: ubuntu-latest
 
     steps:
+      - uses: dorny/paths-filter@v2
+        id: filter
+        with:
+          filters: |
+            backend:
+              - 'multilevel_diacritizer/**'
+#            frontend:
+#              - 'multilevel_diacritizer_ui/**'
+
+    outputs:
+      backend: ${{ steps.filter.outputs.backend }}
+#      frontend: ${{ steps.filter.outputs.frontend }}
+
+
+  backend:
+
+    needs: changes
+    if: ${{ needs.changes.outputs.backend == 'true' }}
+    runs-on: ubuntu-latest
+
+    steps:
+
     - uses: actions/checkout@v2
 
     - name: Set up Python
