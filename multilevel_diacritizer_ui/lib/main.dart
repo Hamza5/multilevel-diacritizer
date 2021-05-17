@@ -4,9 +4,9 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:clipboard/clipboard.dart';
 
-import 'dart:html' as html;
+import 'dart:html';
 
-final Uri _submitURL = Uri.parse(html.window.location.href);
+final Uri _submitURL = Uri.parse(window.location.href);
 
 void main() {
   runApp(MyApp());
@@ -19,19 +19,21 @@ class MyApp extends StatelessWidget {
     return MaterialApp(
       title: 'Multilevel diacritizer',
       builder: (BuildContext context, Widget? child) => FocusScope(
-        child: GestureDetector( // Useful to hide the keyboard in the mobile app
+        child: GestureDetector(
+          // Useful to hide the keyboard in the mobile app
           onTap: () => Focus.of(context).unfocus(),
           child: child,
         ),
       ),
       theme: ThemeData(
-          primarySwatch: Colors.blue,
-          visualDensity: VisualDensity.adaptivePlatformDensity,
-          accentColor: Colors.green,
-          iconTheme: IconTheme.of(context).copyWith(color: Colors.blue)),
+        primarySwatch: Colors.blue,
+        visualDensity: VisualDensity.adaptivePlatformDensity,
+        accentColor: Colors.green,
+        iconTheme: IconTheme.of(context).copyWith(color: Colors.blue),
+      ),
       home: Scaffold(
         appBar: AppBar(
-          title: Text('Multilevel diacritizer'),
+          title: Text('Multilevel diacritizer ($_submitURL)'),
         ),
         body: DiacritizationForm(),
       ),
@@ -112,36 +114,65 @@ class _DiacritizationFormState extends State<DiacritizationForm> {
             Row(
               children: <Widget>[
                 Expanded(
-                  child: TextFormField(
-                    readOnly: !_enableSubmit,
-                    textDirection: TextDirection.rtl,
-                    style: TextStyle(
-                      fontSize: Theme.of(context).textTheme.headline6?.fontSize,
-                    ),
-                    minLines: 10,
-                    maxLines: 100,
-                    decoration: InputDecoration(
-                      labelText: 'The Arabic text to diacritize',
-                      labelStyle: Theme.of(context)
-                          .textTheme
-                          .headline6
-                          ?.copyWith(color: Colors.blue),
-                      border: OutlineInputBorder(),
-                    ),
-                    controller: _textEditingController,
-                    autofocus: true,
+                  child: Stack(
+                    children: [
+                      TextFormField(
+                        readOnly: !_enableSubmit,
+                        enabled: _enableSubmit,
+                        textDirection: TextDirection.rtl,
+                        style: TextStyle(
+                          fontSize:
+                              Theme.of(context).textTheme.headline6?.fontSize,
+                        ),
+                        minLines: 10,
+                        maxLines: 100,
+                        decoration: InputDecoration(
+                          labelText: 'The Arabic text to diacritize',
+                          labelStyle: Theme.of(context)
+                              .textTheme
+                              .headline6
+                              ?.copyWith(color: Colors.blue),
+                          border: OutlineInputBorder(),
+                        ),
+                        controller: _textEditingController,
+                        autofocus: true,
+                      ),
+                      Container(
+                        padding: EdgeInsets.all(1),
+                        child: Visibility(
+                          visible: !_enableSubmit,
+                          child: ClipRRect(
+                            child: LinearProgressIndicator(
+                              minHeight: 5,
+                              valueColor:
+                                  AlwaysStoppedAnimation(Colors.blueAccent),
+                            ),
+                            borderRadius: BorderRadius.circular(2),
+                          ),
+                        ),
+                      ),
+                    ],
+                    alignment: Alignment.bottomCenter,
                   ),
                 ),
                 Column(
                   children: <Widget>[
                     IconButton(
                       icon: Icon(Icons.copy),
-                      onPressed: _enableSubmit ? () =>
-                          FlutterClipboard.copy(_textEditingController.text)
-                              .then((value) => _showSnackBar(
-                                  'Text copied to clipboard!',
-                                  Icons.info,
-                                  Colors.blueAccent)): null,
+                      onPressed: _enableSubmit
+                          ? () =>
+                              FlutterClipboard.copy(_textEditingController.text)
+                                  .then(
+                                      (value) =>
+                                          _showSnackBar(
+                                              'Text copied to clipboard!',
+                                              Icons.info,
+                                              Colors.blueAccent))
+                                  .onError((error, stackTrace) => _showSnackBar(
+                                      error.toString(),
+                                      Icons.warning,
+                                      Theme.of(context).errorColor))
+                          : null,
                       tooltip: 'Copy the text to the clipboard',
                     ),
                     SizedBox(
@@ -149,19 +180,29 @@ class _DiacritizationFormState extends State<DiacritizationForm> {
                     ),
                     IconButton(
                       icon: Icon(Icons.paste),
-                      onPressed: _enableSubmit ? () => FlutterClipboard.paste().then((value) {
-                        setState(() => _textEditingController.text = value);
-                      }) : null,
+                      onPressed: _enableSubmit
+                          ? () => FlutterClipboard.paste()
+                                  .onError((error, stackTrace) {
+                                _showSnackBar(error.toString(), Icons.warning,
+                                    Theme.of(context).errorColor);
+                                return '';
+                              }).then((value) {
+                                setState(
+                                    () => _textEditingController.text = value);
+                              })
+                          : null,
                       tooltip: 'Paste the text from the clipboard',
                     ),
                     SizedBox(
                       height: 10,
                     ),
                     IconButton(
-                        icon: Icon(Icons.clear),
-                        onPressed: _enableSubmit ? () {
-                          setState(() => _textEditingController.clear());
-                        } : null,
+                      icon: Icon(Icons.clear),
+                      onPressed: _enableSubmit
+                          ? () {
+                              setState(() => _textEditingController.clear());
+                            }
+                          : null,
                       tooltip: 'Clear the text',
                     )
                   ],
@@ -186,7 +227,7 @@ class _DiacritizationFormState extends State<DiacritizationForm> {
                   ),
                   duration: Duration(milliseconds: 500),
                   tween: Tween<double>(begin: 0, end: _angle),
-                  builder: (BuildContext context, double angle, Widget? child){
+                  builder: (BuildContext context, double angle, Widget? child) {
                     return Transform.rotate(
                       angle: angle,
                       child: child,
