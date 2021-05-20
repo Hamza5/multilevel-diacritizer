@@ -1,0 +1,15 @@
+{
+  "name": "Multilevel diacritizer",
+  "description": "A web application allowing automatic Arabic text diacritization using the Multilevel diacritizer model.",
+  "repository": "https://github.com/Hamza5/multilevel-diacritizer",
+  "logo": "https://github.com/Hamza5/multilevel-diacritizer/raw/master/multilevel_diacritizer_ui/web/icons/Icon-192.png",
+  "keywords": ["deep-learning", "diacritics", "arabic", "diacritization", "diacritics-restoration"],
+  "buildpacks": [
+    {
+      "url": "https://github.com/moneymeets/python-poetry-buildpack.git"
+    },
+    {
+      "url": "heroku/python"
+    }
+  ]
+}
