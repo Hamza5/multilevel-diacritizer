@@ -4,9 +4,6 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:clipboard/clipboard.dart';
 
-import 'dart:html';
-
-final Uri _submitURL = Uri.parse(window.location.href);
 
 void main() {
   runApp(MyApp());
@@ -33,7 +30,7 @@ class MyApp extends StatelessWidget {
       ),
       home: Scaffold(
         appBar: AppBar(
-          title: Text('Multilevel diacritizer ($_submitURL)'),
+          title: Text('Multilevel diacritizer'),
         ),
         body: DiacritizationForm(),
       ),
@@ -64,7 +61,7 @@ class _DiacritizationFormState extends State<DiacritizationForm> {
     var finalIcon = Icons.check;
     var finalColor = Theme.of(context).accentColor;
     try {
-      var response = await http.post(_submitURL,
+      var response = await http.post(Uri.parse(''),
           body: _textEditingController.text,
           headers: {'Content-Type': 'text/plain; charset=UTF-8'},
           encoding: Encoding.getByName('UTF-8'));
@@ -168,7 +165,7 @@ class _DiacritizationFormState extends State<DiacritizationForm> {
                                               'Text copied to clipboard!',
                                               Icons.info,
                                               Colors.blueAccent))
-                                  .onError((error, stackTrace) => _showSnackBar(
+                                  .catchError((error) => _showSnackBar(
                                       error.toString(),
                                       Icons.warning,
                                       Theme.of(context).errorColor))
@@ -181,8 +178,7 @@ class _DiacritizationFormState extends State<DiacritizationForm> {
                     IconButton(
                       icon: Icon(Icons.paste),
                       onPressed: _enableSubmit
-                          ? () => FlutterClipboard.paste()
-                                  .onError((error, stackTrace) {
+                          ? () => FlutterClipboard.paste().catchError((error) {
                                 _showSnackBar(error.toString(), Icons.warning,
                                     Theme.of(context).errorColor);
                                 return '';
