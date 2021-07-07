@@ -14,7 +14,7 @@ jobs:
 
     outputs:
       backend: ${{ steps.filter.outputs.backend }}
-#      frontend: ${{ steps.filter.outputs.frontend }}
+      frontend: ${{ steps.filter.outputs.frontend }}
 
     steps:
       - uses: actions/checkout@v2
@@ -24,8 +24,10 @@ jobs:
           filters: |
             backend:
               - 'multilevel_diacritizer/**'
-#            frontend:
-#              - 'multilevel_diacritizer_ui/**'
+              - '.github/workflows/**'
+            frontend:
+              - 'multilevel_diacritizer_ui/**'
+              - '.github/workflows/**'
 
 
   backend:
@@ -64,3 +66,26 @@ jobs:
       run: |
         source .venv/bin/activate
         python -m unittest discover tests/
+
+  frontend:
+
+    needs: changes
+    if: ${{ needs.changes.outputs.frontend == 'true' }}
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./multilevel_diacritizer_ui/
+
+    steps:
+
+    - uses: actions/checkout@v2
+
+    - uses: subosito/flutter-action@v1
+      with:
+        flutter-version: '2.x'
+        channel: 'stable'
+
+    - name: Install Flutter dependencies
+      run: flutter pub get
+    - name: Run Flutter tests
+      run: flutter test

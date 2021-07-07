@@ -6,10 +6,10 @@ import 'package:clipboard/clipboard.dart';
 
 
 void main() {
-  runApp(MyApp());
+  runApp(MultilevelDiacritizerFrontEnd());
 }
 
-class MyApp extends StatelessWidget {
+class MultilevelDiacritizerFrontEnd extends StatelessWidget {
   // This widget is the root of your application.
   @override
   Widget build(BuildContext context) {
