@@ -1,13 +1,20 @@
 import numpy as np
 import tensorflow as tf
+
+physical_devices = tf.config.list_physical_devices('GPU')
+if physical_devices:
+    tf.config.experimental.set_memory_growth(physical_devices[0], enable=True)
+
 from tensorflow.keras import Model, Input
 from tensorflow.keras.layers import Embedding, LSTM, Dense, Bidirectional
 
 from multilevel_diacritizer.constants import (
     DIGIT, DIGIT_PATTERN, DIACRITICS, SHORT_VOWELS, DOUBLE_CASE_ENDINGS, SHADDA, SUKOON, DEFAULT_WINDOW_SIZE,
-    DEFAULT_EMBEDDING_SIZE, DEFAULT_LSTM_SIZE, DEFAULT_DROPOUT_RATE, CHARS, DECODE_LETTERS_TABLE, DECODE_PRIMARY_TABLE,
-    DECODE_SECONDARY_TABLE, DECODE_SHADDA_TABLE, DECODE_SUKOON_TABLE, ENCODE_LETTERS_TABLE, ENCODE_PRIMARY_TABLE,
-    ENCODE_SECONDARY_TABLE, ENCODE_BINARY_TABLE
+    DEFAULT_EMBEDDING_SIZE, DEFAULT_LSTM_SIZE, DEFAULT_DROPOUT_RATE, CHARS
+)
+from multilevel_diacritizer.tf_hash_tables import (
+    DECODE_LETTERS_TABLE, DECODE_PRIMARY_TABLE, DECODE_SECONDARY_TABLE, DECODE_SHADDA_TABLE, DECODE_SUKOON_TABLE,
+    ENCODE_LETTERS_TABLE, ENCODE_PRIMARY_TABLE, ENCODE_SECONDARY_TABLE, ENCODE_BINARY_TABLE
 )
 from multilevel_diacritizer.metrics import DiacritizationErrorRate, WordErrorRate
 

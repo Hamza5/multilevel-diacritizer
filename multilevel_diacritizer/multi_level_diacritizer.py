@@ -4,25 +4,19 @@ from argparse import ArgumentParser, FileType
 from logging import getLogger, basicConfig
 from pathlib import Path
 
-import tensorflow as tf
-
-# The next two instructions are added to avoid the crash of Tensorflow when calling a model on a GPU.
-physical_devices = tf.config.list_physical_devices('GPU')
-if physical_devices:
-    tf.config.experimental.set_memory_growth(physical_devices[0], enable=True)
 from multilevel_diacritizer.constants import (
-    DEFAULT_PARAMS_DIR, DEFAULT_TRAIN_STEPS, DEFAULT_BATCH_SIZE, DEFAULT_EARLY_STOPPING_STEPS, DEFAULT_WINDOW_SIZE,
-    DEFAULT_SLIDING_STEP, DEFAULT_MONITOR_METRIC, DEFAULT_EMBEDDING_SIZE, DEFAULT_LSTM_SIZE, DEFAULT_DROPOUT_RATE,
-    SENTENCE_TOKENIZATION_REGEXP, SENTENCE_SEPARATORS, DIACRITICS_PATTERN, DEFAULT_DIACRITIZATION_LINES_COUNT
+    DEFAULT_DIACRITIZATION_LINES_COUNT, DEFAULT_LSTM_SIZE, DEFAULT_DROPOUT_RATE, DEFAULT_EMBEDDING_SIZE,
+    DEFAULT_PARAMS_DIR, DEFAULT_SLIDING_STEP, DEFAULT_BATCH_SIZE, DEFAULT_EARLY_STOPPING_STEPS, DEFAULT_WINDOW_SIZE,
+    DEFAULT_TRAIN_STEPS, DEFAULT_MONITOR_METRIC, SENTENCE_TOKENIZATION_REGEXP, SENTENCE_SEPARATORS,
+    DIACRITICS_PATTERN
 )
-
-from multilevel_diacritizer.model import MultiLevelDiacritizer
 
 basicConfig(level='INFO', format='%(asctime)s [%(name)s] %(levelname)s: %(message)s', datefmt='%Y-%m-%d %H:%M:%S')
 logger = getLogger(__name__)
 
 
 def get_dataset_from(data_paths, args):
+    from multilevel_diacritizer.model import MultiLevelDiacritizer
     files_names = []
     for path in data_paths:
         if path.is_dir():
@@ -34,6 +28,7 @@ def get_dataset_from(data_paths, args):
 
 
 def get_loaded_model(args):
+    from multilevel_diacritizer.model import MultiLevelDiacritizer
     model = MultiLevelDiacritizer(window_size=args.window_size, lstm_size=args.lstm_size,
                                   dropout_rate=args.dropout_rate, embedding_size=args.embedding_size,
                                   test_der=args.calculate_der, test_wer=args.calculate_wer)
@@ -46,7 +41,8 @@ def get_loaded_model(args):
         model.load_weights(str(model_path), by_name=True, skip_mismatch=True)
         logger.info('Model weights loaded from %s ...', str(model_path))
     else:
-        logger.warning('Random weights initialized for the model %s ...', model.name)
+        logger.warning('Weights file %s not found. Random weights initialized for the model %s ...',
+                       str(model_path), model.name)
     return model, model_path
 
 

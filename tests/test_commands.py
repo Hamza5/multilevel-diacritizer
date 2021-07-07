@@ -2,10 +2,11 @@ import unittest
 from io import StringIO
 from contextlib import redirect_stdout
 from logging import getLogger, StreamHandler
+from pathlib import Path
 
+from multilevel_diacritizer.confusion_matrix import generate_confusion_matrix
 from multilevel_diacritizer.multi_level_diacritizer import (
-    train_command, train_parser, diacritization_command, diacritization_parser
-
+    train_command, train_parser, diacritization_command, diacritization_parser, confusion_parser
 )
 from multilevel_diacritizer.constants import DIACRITICS_PATTERN
 
@@ -52,6 +53,13 @@ class CommandsTestCase(unittest.TestCase):
         self.assertNotEqual(args.out_file.getvalue(), u_text)
         self.assertEqual(DIACRITICS_PATTERN.sub('', args.out_file.getvalue()), u_text)
         _close()
+
+    def test_confusion_matrix(self):
+        image_path = Path('tests/confusion.png')
+        args = confusion_parser.parse_args(['tests/train_mini.txt', 'tests/train_mini.txt', '-o', str(image_path)])
+        generate_confusion_matrix(args.predicted_file, args.test_file, args.out_picture)
+        self.assertTrue(image_path.exists())
+        image_path.unlink()
 
 
 if __name__ == '__main__':

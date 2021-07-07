@@ -1,6 +1,7 @@
 import tensorflow as tf
 
-from multilevel_diacritizer.constants import DIGIT, ENCODE_LETTERS_TABLE
+from multilevel_diacritizer.constants import DIGIT
+from multilevel_diacritizer.tf_hash_tables import ENCODE_LETTERS_TABLE
 
 
 class ErrorRate(tf.keras.metrics.Metric):

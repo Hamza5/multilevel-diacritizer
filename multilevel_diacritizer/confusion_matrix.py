@@ -42,7 +42,7 @@ def generate_confusion_matrix(pred_file, test_file, out_picture_path):
 
     confusion_matrix = np.array([[confusion_dict[x][y] for y in sorted(ys)] for x in sorted(confusion_dict.keys())])
     confusion_matrix = confusion_matrix / confusion_matrix.sum(axis=-1, keepdims=True)
-    fig = plt.figure(dpi=150)
+    plt.figure(dpi=150)
     plt.imshow(confusion_matrix, cmap='Blues')
     plt.ylabel('Test data')
     plt.xlabel('Predicted data')
