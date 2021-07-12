@@ -19,4 +19,4 @@ COPY multilevel_diacritizer_ui/build/web/ ./multilevel_diacritizer_ui/build/web
 COPY params/ ./params
 
 EXPOSE 8000
-CMD ["python", "-m", "multilevel_diacritizer.multi_level_diacritizer", "server"]
+CMD ["gunicorn", "-b", "0.0.0.0:8000", "multilevel_diacritizer.multi_level_diacritizer:create_server_app()"]
