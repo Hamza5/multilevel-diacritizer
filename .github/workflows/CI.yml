@@ -102,7 +102,7 @@ jobs:
 #    if: ${{ (needs.changes.outputs.backend == 'true') ||
 #            (needs.changes.outputs.frontend == 'true') ||
 #            (needs.changes.outputs.container == 'true') }}
-    if: $ {{ needs.changes.outputs.changes != '[]' }}
+    if: ${{ needs.changes.outputs.changes != '[]' }}
     runs-on: ubuntu-latest
     env:
       IMAGE_NAME: multilevel-diacritizer
