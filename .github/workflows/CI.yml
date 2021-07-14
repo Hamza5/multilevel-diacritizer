@@ -123,10 +123,10 @@ jobs:
         run: docker run --rm -d -p 8000:8000 --name ${{ env.IMAGE }} --network ${{ env.NETWORK }} ${{ env.IMAGE }}:latest
 
       - name: Test HTTP GET
-        run: docker run --rm --network ${{ env.NETWORK }} curlimages/curl:latest -s http://localhost:8000/
+        run: docker run --rm --network ${{ env.NETWORK }} curlimages/curl:latest http://${{ env.IMAGE }}:8000/
 
       - name: Test HTTP POST
-        run: docker run --rm --network ${{ env.NETWORK }} curlimages/curl:latest -s -d "تجريب نص عربي لتشكيله" http://localhost:8000/
+        run: docker run --rm --network ${{ env.NETWORK }} curlimages/curl:latest -d "تجريب نص عربي لتشكيله" http://${{ env.IMAGE }}:8000/
 
       - name: Stop the container
         run: docker stop ${{ env.IMAGE }}
