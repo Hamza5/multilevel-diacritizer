@@ -15,7 +15,7 @@ jobs:
     outputs:
       backend: ${{ steps.filter.outputs.backend }}
       frontend: ${{ steps.filter.outputs.frontend }}
-      container: ${{ steps.filter.outputs.container }}
+      integration: ${{ steps.filter.outputs.container }}
       changes: ${{ steps.filter.outputs.changes }}
 
     steps:
@@ -96,16 +96,14 @@ jobs:
     - name: Run Flutter tests
       run: flutter test
 
-  container:
+  integration:
 
-    needs: changes
-#    if: ${{ (needs.changes.outputs.backend == 'true') ||
-#            (needs.changes.outputs.frontend == 'true') ||
-#            (needs.changes.outputs.container == 'true') }}
-    if: ${{ needs.changes.outputs.changes != '[]' }}
-    runs-on: ubuntu-latest
     env:
       IMAGE_NAME: multilevel-diacritizer
+      NETWORK_NAME: local
+    needs: changes
+    runs-on: ubuntu-latest
+    if: ${{ needs.changes.outputs.changes != '[]' }}
 
     steps:
 
@@ -115,16 +113,20 @@ jobs:
         uses: docker/build-push-action@v2
         with:
           context: .
-          load: true
           tags: ${{ env.IMAGE_NAME }}:latest
+          load: true
+
+      - name: Create a network
+        run: docker network create ${{ NETWORK_NAME }}
 
       - name: Run the container
-        run: docker run -d -p 8000:8000 --name ${{ env.IMAGE_NAME }} ${{ env.IMAGE_NAME }}:latest
+        run: docker run --rm -d -p 8000:8000 --name ${{ env.IMAGE_NAME }} --network ${{ NETWORK_NAME }} ${{ env.IMAGE_NAME }}:latest
 
-      - name: Test the HTTP requests
-        run: |
-          curl http://localhost:8000/
-          curl -d "تجريب نص عربي لتشكيله" http://localhost:8000/
+      - name: Test HTTP GET
+        run: docker run --rm --network ${{ NETWORK_NAME }} curlimages/curl:latest -s http://localhost:8000/
+
+      - name: Test HTTP POST
+        run: docker run --rm --network ${{ NETWORK_NAME }} curlimages/curl:latest -s -d "تجريب نص عربي لتشكيله" http://localhost:8000/
 
       - name: Stop the container
         run: docker stop ${{ env.IMAGE_NAME }}
