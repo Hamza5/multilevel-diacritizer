@@ -99,8 +99,8 @@ jobs:
   integration:
 
     env:
-      IMAGE_NAME: multilevel-diacritizer
-      NETWORK_NAME: local
+      IMAGE: multilevel-diacritizer
+      NETWORK: local
     needs: changes
     runs-on: ubuntu-latest
     if: ${{ needs.changes.outputs.changes != '[]' }}
@@ -113,20 +113,20 @@ jobs:
         uses: docker/build-push-action@v2
         with:
           context: .
-          tags: ${{ env.IMAGE_NAME }}:latest
+          tags: ${{ env.IMAGE }}:latest
           load: true
 
       - name: Create a network
-        run: docker network create ${{ NETWORK_NAME }}
+        run: docker network create ${{ env.NETWORK }}
 
       - name: Run the container
-        run: docker run --rm -d -p 8000:8000 --name ${{ env.IMAGE_NAME }} --network ${{ NETWORK_NAME }} ${{ env.IMAGE_NAME }}:latest
+        run: docker run --rm -d -p 8000:8000 --name ${{ env.IMAGE }} --network ${{ env.NETWORK }} ${{ env.IMAGE }}:latest
 
       - name: Test HTTP GET
-        run: docker run --rm --network ${{ NETWORK_NAME }} curlimages/curl:latest -s http://localhost:8000/
+        run: docker run --rm --network ${{ env.NETWORK }} curlimages/curl:latest -s http://localhost:8000/
 
       - name: Test HTTP POST
-        run: docker run --rm --network ${{ NETWORK_NAME }} curlimages/curl:latest -s -d "تجريب نص عربي لتشكيله" http://localhost:8000/
+        run: docker run --rm --network ${{ env.NETWORK }} curlimages/curl:latest -s -d "تجريب نص عربي لتشكيله" http://localhost:8000/
 
       - name: Stop the container
-        run: docker stop ${{ env.IMAGE_NAME }}
+        run: docker stop ${{ env.IMAGE }}
