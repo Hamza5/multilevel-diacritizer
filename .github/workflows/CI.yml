@@ -15,6 +15,8 @@ jobs:
     outputs:
       backend: ${{ steps.filter.outputs.backend }}
       frontend: ${{ steps.filter.outputs.frontend }}
+      container: ${{ steps.filter.outputs.container }}
+      changes: ${{ steps.filter.outputs.changes }}
 
     steps:
       - uses: actions/checkout@v2
@@ -97,12 +99,13 @@ jobs:
   container:
 
     needs: changes
-    if: ${{ (needs.changes.outputs.backend == 'true') ||
-            (needs.changes.outputs.frontend == 'true') ||
-            (needs.changes.outputs.container == 'true') }}
+#    if: ${{ (needs.changes.outputs.backend == 'true') ||
+#            (needs.changes.outputs.frontend == 'true') ||
+#            (needs.changes.outputs.container == 'true') }}
+    if: $ {{ needs.changes.outputs.changes != '[]' }}
     runs-on: ubuntu-latest
     env:
-      IMAGE_NAME: ${{ github.repository }}
+      IMAGE_NAME: multilevel-diacritizer
 
     steps:
 
