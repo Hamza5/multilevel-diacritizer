@@ -26,6 +26,10 @@ jobs:
           filters: |
             backend:
               - 'multilevel_diacritizer/**'
+              - 'pyproject.toml'
+              - 'poetry.lock'
+              - 'params/**'
+              - 'tests/**'
               - '.github/workflows/**'
             frontend:
               - 'multilevel_diacritizer_ui/**'
