@@ -79,4 +79,4 @@ to be diacritized by our deep learning model, then the result will be displayed
 on the web interface. You can deploy it to your Heroku account by clicking the
 following button (you can make an account if you do not have, it is free).
 
-[![Deploy](https://www.herokucdn.com/deploy/button.svg)](https://heroku.com/deploy)
+[![Deploy](https://www.herokucdn.com/deploy/button.svg)](https://heroku.com/deploy?template=https://github.com/Hamza5/multilevel-diacritizer)
