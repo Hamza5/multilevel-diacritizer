@@ -6,8 +6,8 @@
 ## About
 
 This repository contains the code of the tool developed for the research titled
-[*Simple extensible deep learning model for automatic Arabic diacritization*](#)
-[*Publication pending*]. This is a command line tool that allow training and loading
+[*Simple extensible deep learning model for automatic Arabic diacritization*](https://dl.acm.org/doi/10.1145/3480938?cid=99659913905).
+This is a command line tool that allow training and loading
 a parametrized deep learning model. It supports restoring the diacritics of
 a text fed through the command line.
 
