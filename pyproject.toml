@@ -7,7 +7,7 @@ license = "MIT"
 
 [tool.poetry.dependencies]
 python = "3.7.10"
-tensorflow-cpu = "~2.6" # Used the CPU version only to be deployed on Heroku.
+tensorflow-cpu = "~2.7" # Used the CPU version only to be deployed on Heroku.
 #tensorflow = "~2.5" # Use this and disable tensorflow-cpu if you have a GPU.
 matplotlib = "^3.3.4"
 Flask = "^1.1.2"
