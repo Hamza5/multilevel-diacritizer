@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:dartarabic/dartarabic.dart';
 
 import 'package:multilevel_diacritizer_ui/main.dart';
 
@@ -35,7 +36,10 @@ void main() {
     await tester.enterText(find.byType(TextFormField), text);
     await tester.tap(clearButton);
     await tester.pump();
-    expect(find.byWidgetPredicate((widget) => widget is TextFormField ? widget.controller?.text == '' : false), findsOneWidget);
+    expect(
+      find.byWidgetPredicate((widget) => widget is TextFormField ? widget.controller?.text == '' : false),
+      findsOneWidget,
+    );
   });
 
   testWidgets('DiacritizationForm Restore diacritics button', (WidgetTester tester) async {
@@ -44,6 +48,20 @@ void main() {
     await tester.tap(restoreButton);
     await tester.pump();
     expect(find.byType(SnackBar), findsOneWidget);
+  });
+
+  testWidgets('DiacritizationForm Clear diacritics button', (WidgetTester tester) async {
+    await tester.pumpWidget(app);
+    final diacritized = 'نصُّ يَحْوي بَعْضَ التشكيل';
+    final undiacritized = DartArabic.stripTashkeel(diacritized);
+    await tester.enterText(find.byType(TextFormField), diacritized);
+    final clearButton = find.text('Clear diacritics');
+    await tester.tap(clearButton);
+    await tester.pump();
+    expect(
+      find.byWidgetPredicate((widget) => widget is TextFormField ? widget.controller?.text == undiacritized : false),
+      findsOneWidget,
+    );
   });
 
 }
