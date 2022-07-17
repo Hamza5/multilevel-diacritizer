@@ -3,6 +3,7 @@ import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:clipboard/clipboard.dart';
+import 'package:dartarabic/dartarabic.dart';
 
 
 void main() {
@@ -58,6 +59,7 @@ class _DiacritizationFormState extends State<DiacritizationForm> {
   final TextEditingController _textEditingController = TextEditingController();
   bool _enableSubmit = true;
   double _angle = 0;
+  Offset _slideOffset = Offset.zero;
 
   Future<void> submit() async {
     setState(() {
@@ -89,6 +91,10 @@ class _DiacritizationFormState extends State<DiacritizationForm> {
       _showSnackBar(finalMessage, finalIcon, finalColor);
     }
   }
+
+  void clearDiacritics() => setState(
+      () => _textEditingController.text = DartArabic.stripTashkeel(_textEditingController.text)
+  );
 
   void _showSnackBar(String text, IconData iconData, Color background,
       {Duration duration = const Duration(seconds: 4)}) {
@@ -213,34 +219,50 @@ class _DiacritizationFormState extends State<DiacritizationForm> {
               ),
             ],
           ),
-          SizedBox(
-            height: 5,
-          ),
+          const SizedBox(height: 5),
           FittedBox(
             fit: BoxFit.scaleDown,
-            child: ElevatedButton.icon(
-              onPressed: _enableSubmit ? submit : null,
-              label: Text(
-                'Restore diacritics',
-                textScaleFactor: 1.5,
-              ),
-              icon: TweenAnimationBuilder(
-                child: Icon(
-                  Icons.settings_backup_restore,
-                  color: Theme.of(context).scaffoldBackgroundColor,
+            child: Row(
+              children: [
+                ElevatedButton.icon(
+                  onPressed: _enableSubmit ? submit : null,
+                  label: const Text(
+                    'Restore diacritics',
+                    textScaleFactor: 1.5,
+                  ),
+                  icon: TweenAnimationBuilder(
+                    child: Icon(
+                      Icons.settings_backup_restore,
+                      color: Theme.of(context).scaffoldBackgroundColor,
+                    ),
+                    duration: const Duration(milliseconds: 500),
+                    tween: Tween<double>(begin: 0, end: _angle),
+                    builder: (BuildContext context, double angle, Widget? child) {
+                      return Transform.rotate(
+                        angle: angle,
+                        child: child,
+                      );
+                    },
+                    onEnd: () => setState(() {
+                      if (!_enableSubmit) _angle -= pi;
+                    }),
+                  ),
+                  onHover: (hovered) => setState(() => hovered ? _angle -= pi : null),
                 ),
-                duration: Duration(milliseconds: 500),
-                tween: Tween<double>(begin: 0, end: _angle),
-                builder: (BuildContext context, double angle, Widget? child) {
-                  return Transform.rotate(
-                    angle: angle,
-                    child: child,
-                  );
-                },
-                onEnd: () => setState(() {
-                  if (!_enableSubmit) _angle -= pi;
-                }),
-              ),
+                const SizedBox(width: 5),
+                ElevatedButton.icon(
+                  onPressed: clearDiacritics,
+                  label: const Text('Clear diacritics', textScaleFactor: 1.5),
+                  icon: AnimatedSlide(
+                    offset: _slideOffset,
+                    duration: const Duration(milliseconds: 250),
+                    child: const Icon(Icons.format_clear),
+                    curve: Curves.ease,
+                    onEnd: () => setState(() => _slideOffset = Offset.zero),
+                  ),
+                  onHover: (hovered) => setState(() => hovered ? _slideOffset = Offset.fromDirection(0, 0.25) : null),
+                )
+              ],
             ),
           ),
         ],
